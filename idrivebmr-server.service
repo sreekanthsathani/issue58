@@ -1,0 +1,12 @@
+[Unit]
+Description=IDriveBMR Client/Server Network Backup System
+After=syslog.target network.target
+
+[Service]
+ExecStart=/usr/bin/idrivebmrsrv run --config /etc/default/idrivebmrsrv --no-consoletime
+User=root
+TasksMax=infinity
+
+[Install]
+WantedBy=multi-user.target
+

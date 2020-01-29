@@ -1,0 +1,10 @@
+"/var/log/idrivebmr.log" {
+	weekly
+	rotate 12
+	missingok
+	create 640 idrivebmr idrivebmr
+	compress
+	postrotate
+		test -e /var/run/idrivebmrsrv.pid && kill -HUP `cat /var/run/idrivebmrsrv.pid` || /bin/systemctl kill -s HUP idrivebmr-server.service
+	endscript
+}

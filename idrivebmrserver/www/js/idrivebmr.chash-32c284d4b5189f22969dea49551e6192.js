@@ -1,4 +1,4 @@
-﻿g.main_nav_pos=5;
+g.main_nav_pos=5;
 g.loading=false;
 g.lang="-";
 g.startup=true;

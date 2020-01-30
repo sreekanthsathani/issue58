@@ -319,20 +319,7 @@ void open_server_database(bool init_db)
 			Server->getServerWorkingDir() + os_file_sep() + "idrivebmr" + os_file_sep() + "backup_server_settings.db\"", LL_ERROR);
 		exit(1);
 	}
-
-	if (!Server->openDatabase("idrivebmr/settings.db", IDRIVEBMRDB_SETTINGS, params_nil))
-       	{
-        	Server->Log("Couldn't open Database settings.db. Exiting. Expecting database at \""
-	            + Server->getServerWorkingDir() + os_file_sep() + "idrivebmr" + os_file_sep() + "settings.db\"", LL_ERROR);
-               exit(1);
-       	}
-
-	if (!Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SETTINGS)) {
-		Server->Log("Couldn't open backup server database. Exiting. Expecting database at \""
-		 + Server->getServerWorkingDir() + os_file_sep() + "idrivebmr" + os_file_sep() + "settings.db\"", LL_ERROR);
-		exit(1);
-	}
-
+	
 	Server->destroyDatabases(Server->getThreadID());
 }
 

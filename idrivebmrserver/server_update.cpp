@@ -51,6 +51,8 @@ ServerUpdate::ServerUpdate(void)
 
 void ServerUpdate::update_client()
 {
+	return;
+	/*
 	if(url_fak==NULL)
 	{
 		Server->Log("Urlplugin not found. Cannot download client for autoupdate.", LL_ERROR);
@@ -165,10 +167,14 @@ void ServerUpdate::update_client()
 			writestring(version, "idrivebmr/"+curr.versionname);
 		}
 	}
+	*/
 }
 
 void ServerUpdate::update_server_version_info()
 {
+	return;
+
+	/*
 	if(url_fak==NULL)
 	{
 		Server->Log("Urlplugin not found. Cannot download server version info.", LL_ERROR);
@@ -204,11 +210,14 @@ void ServerUpdate::update_server_version_info()
 				Server->Log("Error renaming server_version_info.properties . " + os_last_error_str(), LL_ERROR);
 			}
 		}
-	}	
+	}	*/
+	
 }
 
 void ServerUpdate::update_dataplan_db()
 {
+	return;
+	/*
 	if (url_fak == NULL)
 	{
 		Server->Log("Urlplugin not found. Cannot download dataplan database.", LL_ERROR);
@@ -246,7 +255,7 @@ void ServerUpdate::update_dataplan_db()
 			DataplanDb::getInstance()->read("idrivebmr/dataplan_db.txt");
 		}
 
-	}
+	}*/
 }
 
 void ServerUpdate::read_update_location()

@@ -55,6 +55,7 @@ std::vector<std::string> BackupServer::force_offline_clients;
 std::map<std::string, std::vector<std::string> >  BackupServer::virtual_clients;
 IMutex* BackupServer::virtual_clients_mutex=NULL;
 bool BackupServer::can_mount_images = false;
+bool BackupServer::is_zfs_configured = false;
 
 extern IFSImageFactory *image_fak;
 
@@ -290,8 +291,44 @@ namespace
 	};
 }
 
+bool BackupServer::isZFSConfigured()
+{
+	if(!is_zfs_configured)
+	{ 
+		//If not read the DB to get the info;
+		std::string ret;
+		std::string dbmanager = "/usr/local/DBManager";
+		int rc = os_popen(dbmanager + "  read_zfs_pwd",	ret);
+
+		if (rc != 0 || (ret.find("No zfs pwd set") != std::string::npos))
+		{
+			is_zfs_configured = false;
+			return false;
+		}
+		else
+		{
+			is_zfs_configured = true;
+			Server->Log("Encryption is enabled on the BMR server",LL_INFO);
+			return true;
+		}
+	}
+	else
+	{
+		return true;
+	}
+
+}
+
 void BackupServer::startClients(FileClient &fc)
 {
+	bool wait_for_server_setup = true;
+	
+	while(!isZFSConfigured())
+	{
+		Server->Log("Data storage is not encrypted yet.. Waiting for it to be configured",LL_ERROR);
+		Server->wait(2000);
+	}
+
 	std::vector<SClientInfo> client_info;
 
 	if(!internet_only_mode)
@@ -724,10 +761,6 @@ void BackupServer::testSnapshotAvailability(IDatabase *db)
 		"SELECT value FROM settings_db.settings WHERE key=? AND clientid=0");
 	Server->Log("Testing if backup destination can handle subvolumes and snapshots...", LL_DEBUG);
 
-
-        IDatabase *db_settings = NULL;
-        db_settings = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SETTINGS);
-
 	std::string snapshot_helper_cmd=Server->getServerParameter("snapshot_helper");
 	if(!snapshot_helper_cmd.empty())
 	{
@@ -761,24 +794,14 @@ void BackupServer::testSnapshotAvailability(IDatabase *db)
 			}
 			else
 			{
-                               //ID157463562-LocalBackupFailure
-                               if (!db_settings)
-                               {
-                                       Server->Log("Couldn't open backup server database. Exiting. Expecting database at \""
-                                               + Server->getServerWorkingDir() + os_file_sep() + "idrivebmr" + os_file_sep() + "settings.db\"", LL_ERROR);
-                                       exit(1);
-                               }
-                               else
-                               {
-                                       db_settings->BeginWriteTransaction();
-                                       db_settings->Write("UPDATE generalKeyValueSettings SET data='BAD' WHERE name='zfs_dataset_status'");
-                                       db_settings->EndTransaction();
-                                       Server->Log("Shutting down the server as zfs is corrupted!", LL_ERROR);
-                                       Server->Log("Contact support for further assistance.", LL_ERROR);
-                                       Server->destroy(db_settings);
-                                       exit(1);
-                               }
+				Server->Log("Copy on write mode is disabled, because the filesystem does not support it anymore.", LL_ERROR);
+				db->BeginWriteTransaction();
+				db->Write("DELETE FROM settings_db.settings WHERE key='cow_mode' AND clientid=0");
+				db->Write("INSERT INTO settings_db.settings (key, value, clientid) VALUES ('cow_mode', 'false', 0)");
+				db->EndTransaction();
 
+				image_snapshots_enabled = false;
+				file_snapshots_enabled = false;
 			}
 		}
 	}
@@ -791,20 +814,6 @@ void BackupServer::testSnapshotAvailability(IDatabase *db)
 		db->Write("INSERT INTO settings_db.settings (key, value, clientid) VALUES ('cow_mode', 'true', 0)");
 		db->EndTransaction();
 	}
-
-
-	if (!db_settings)
-       	{
-               Server->Log("Couldn't open backup server database. Exiting. Expecting database at \""
-                       + Server->getServerWorkingDir() + os_file_sep() + "idrivebmr" + os_file_sep() + "settings.db\"", LL_ERROR);
-               exit(1);
-       	}
-       	else
-       	{
-               db_settings->Write("UPDATE generalKeyValueSettings SET data='GOOD' WHERE name='zfs_dataset_status'");
-               Server->destroy(db_settings);
-       	}
-
 
 	if(image_snapshots_enabled || file_snapshots_enabled)
 	{

@@ -64,16 +64,16 @@ void CHTTPFile::operator ()(void)
 
 	if( fp==NULL )
 	{
-		output->Write("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: 22\r\n\r\nSorry. File not found.");
+		output->Write("HTTP/1.1 404 Not Found\r\nCache-Control: max-age=0\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers :Access-Control-Allow-Headers, Origin,Accept, X-Requested-With\r\n\r\nContent-Type: text/html\r\nContent-Length: 22\r\n\r\nSorry. File not found.");
 		return;
 	}
 
 	std::string status="HTTP/1.1 200 ok\r\n";
 
-	std::string cache_header = "Cache-Control: no-cache";
+	std::string cache_header = "Cache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers :Access-Control-Allow-Headers, Origin,Accept, X-Requested-With\r\n";
 	if (ExtractFileName(filename).find(".chash-")!=std::string::npos)
 	{
-		cache_header = "Cache-Control: max-age=365000000, immutable";
+		cache_header = "Cache-Control: max-age=365000000, immutable\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers :Access-Control-Allow-Headers, Origin,Accept, X-Requested-With\r\n";
 	}
 
 	std::string header="Server: CS\r\nContent-Type: "+ct+"\r\n"+cache_header+"\r\nConnection: Keep-Alive\r\nKeep-Alive: timeout=15, max=95\r\nContent-Length: "+convert(fp->Size())+"\r\n\r\n";

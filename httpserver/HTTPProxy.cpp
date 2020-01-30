@@ -69,7 +69,7 @@ void CHTTPProxy::operator()(void)
 	{
 		for(size_t i=0;i<output.size();++i)
 		{
-			output[i]->Write("HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: 33\r\n\r\nSorry. Could not connect to host.");
+			output[i]->Write("HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers :Access-Control-Allow-Headers, Origin,Accept, X-Requested-With\r\n\r\nContent-Type: text/html\r\nContent-Length: 33\r\n\r\nSorry. Could not connect to host.");
 		}
 		return;
 	}

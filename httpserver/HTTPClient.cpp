@@ -454,7 +454,7 @@ bool CHTTPClient::processRequest(void)
 		if(found==false)
 		{
 			Server->Log("URL not allowed");
-			pipe->Write("HTTP/1.1 403 Not Allowed\r\nContent-Type: text/html\r\nContent-Length: 46\r\n\r\nSorry. You're not allowed to access this file.");
+			pipe->Write("HTTP/1.1 403 Not Allowed\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers :Access-Control-Allow-Headers, Origin,Accept, X-Requested-With\r\n\r\nContent-Type: text/html\r\nContent-Length: 46\r\n\r\nSorry. You're not allowed to access this file.");
 			request_handler=NULL;
 			request_ticket=ILLEGAL_THREADPOOL_TICKET;
 			return false;			

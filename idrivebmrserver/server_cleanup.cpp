@@ -42,6 +42,7 @@
 #include <algorithm>
 #include "create_files_index.h"
 #include "../idrivebmrcommon/WalCheckpointThread.h"
+#include "../idrivebmrcommon/json.h"
 #include "copy_storage.h"
 #include <assert.h>
 #include <set>
@@ -1647,6 +1648,7 @@ void ServerCleanupThread::removeClient(int clientid)
 
 void ServerCleanupThread::deletePendingClients(void)
 {
+	JSON::Object root;
 	db_results res=db->Read("SELECT id, name FROM clients WHERE delete_pending=1");
 	for(size_t i=0;i<res.size();++i)
 	{
@@ -1658,6 +1660,20 @@ void ServerCleanupThread::deletePendingClients(void)
 		}
 
 		removeClient(watoi(res[i]["id"]));
+		
+		//added by Chandru.. for gettting list of deleted clients to remove from cloud db..
+		root.set(res[i]["id"],res[i]["name"]);
+	}
+
+	//Remove clients from Cloud db.. Added by Chandru
+	if(res.size() > 0)
+	{
+		std::string jsonObj = root.stringify(true);
+		ServerLogger::Log(logid, "Jsonsied string for script is " + jsonObj, LL_INFO);
+		if (!ClientMain::run_script("/usr/share/idrivebmr/run", " CleanUp --clients " + jsonObj, logid))
+		{
+			ServerLogger::Log(logid, "Error calling cleanup_clients scripts ", LL_ERROR);
+		}
 	}
 }
 

@@ -55,6 +55,7 @@ std::vector<std::string> BackupServer::force_offline_clients;
 std::map<std::string, std::vector<std::string> >  BackupServer::virtual_clients;
 IMutex* BackupServer::virtual_clients_mutex=NULL;
 bool BackupServer::can_mount_images = false;
+bool BackupServer::is_zfs_configured = false;
 
 extern IFSImageFactory *image_fak;
 
@@ -290,8 +291,44 @@ namespace
 	};
 }
 
+bool BackupServer::isZFSConfigured()
+{
+	if(!is_zfs_configured)
+	{ 
+		//If not read the DB to get the info;
+		std::string ret;
+		std::string dbmanager = "/usr/local/DBManager";
+		int rc = os_popen(dbmanager + "  read_zfs_pwd",	ret);
+
+		if (rc != 0 || (ret.find("No zfs pwd set") != std::string::npos))
+		{
+			is_zfs_configured = false;
+			return false;
+		}
+		else
+		{
+			is_zfs_configured = true;
+			Server->Log("Encryption is enabled on the BMR server",LL_INFO);
+			return true;
+		}
+	}
+	else
+	{
+		return true;
+	}
+
+}
+
 void BackupServer::startClients(FileClient &fc)
 {
+	bool wait_for_server_setup = true;
+	
+	while(!isZFSConfigured())
+	{
+		Server->Log("Data storage is not encrypted yet.. Waiting for it to be configured",LL_ERROR);
+		Server->wait(2000);
+	}
+
 	std::vector<SClientInfo> client_info;
 
 	if(!internet_only_mode)

@@ -185,7 +185,7 @@ void ServerVHDWriter::operator()(void)
 		ServerLogger::Log(logid, "Starting trimming image file (if possible)", LL_DEBUG);
 		if(!vhd->trimUnused(mbr_offset, vhd_blocksize, this))
 		{
-			ServerLogger::Log(logid, "Trimming file failed. Image backup may use too much storage.", LL_WARNING);
+			ServerLogger::Log(logid, "Trimming file failed. Image backup may use too much storage.", LL_DEBUG);
 		}
 		else
 		{

@@ -344,6 +344,7 @@ bool create_subvolume(int mode, std::string subvolume_folder)
 	}
 	else if(mode==mode_zfs)
 	{
+
 		int rc=exec_wait(find_zfs_cmd(), true, "create", "-p", subvolume_folder.c_str(), NULL);
 		chown_dir(subvolume_folder);
 		return rc==0;
@@ -371,6 +372,31 @@ bool get_mountpoint(int mode, std::string subvolume_folder)
 	return false;
 #endif
 }
+
+int verify_dataset(const std::string& dataset_name)
+{
+  std::string values;
+  int rc=exec_wait(find_zfs_cmd(), values, "get", "-H", "-o", "value", "mounted,encryption,keystatus", dataset_name.c_str(), NULL);
+  if(rc==0)
+  {
+    std::vector<std::string> properties;
+    Tokenize(values, properties, "\n");
+
+    std::string mounted = properties.at(0);
+    std::string encryption = properties.at(1);
+    std::string keystatus = properties.at(2);
+    if(mounted == "yes" && keystatus == "available")
+    {
+        rc = 0;
+    }
+    else
+    {
+        rc = 1;
+    }
+  }
+  return rc==0;
+}
+
 
 bool create_snapshot(int mode, std::string snapshot_src, std::string snapshot_dst)
 {
@@ -659,7 +685,11 @@ int main(int argc, char *argv[])
 		std::string name=handleFilename(argv[4]);
 
 		std::string subvolume_folder=backupfolder+os_file_sep()+clientname+os_file_sep()+name;
-		
+		if(!verify_dataset(backupfolder))
+		{
+			std::cout << "dataset not mounted or encrypted" << std::endl;
+			return 1;
+		}
 		return create_subvolume(mode, subvolume_folder)?0:1;
 	}
 	else if(cmd=="mountpoint")
@@ -711,9 +741,10 @@ int main(int argc, char *argv[])
 	}
 	else if(cmd=="test")
 	{
-		std::cout << "Testing for btrfs..." << std::endl;
+		//std::cout << "Testing for btrfs..." << std::endl;
 		std::string clientdir=backupfolder+os_file_sep()+"testA54hj5luZtlorr494";
 		
+		/*
 		bool create_dir_rc=os_create_dir(clientdir);
 		if(!create_dir_rc)
 		{	
@@ -783,14 +814,14 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 		}
-		else
+		else*/
 		{
-			std::cout << "TEST FAILED: Creating test clientdir \"" << clientdir << "\" failed" << std::endl;
+			//std::cout << "TEST FAILED: Creating test clientdir \"" << clientdir << "\" failed" << std::endl;
 						
 			return zfs_test();
 		}
-		std::cout << "BTRFS TEST OK" << std::endl;
-		return 10 + mode_btrfs;
+		//std::cout << "BTRFS TEST OK" << std::endl;
+		//return 10 + mode_btrfs;
 	}
 	else if(cmd=="issubvolume")
 	{

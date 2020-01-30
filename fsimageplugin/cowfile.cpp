@@ -675,7 +675,7 @@ bool CowFile::trimUnused(_i64 fs_offset, _i64 trim_blocksize, ITrimCallback* tri
 			{
 				if(!setUnused(unused_start, unused_end))
 				{
-					Server->Log("Trimming syscall failed. Stopping trimming.", LL_WARNING);
+					Server->Log("Trimming syscall failed. Stopping trimming.", LL_DEBUG);
 					return false;
 				}
 				if(trim_callback!=NULL)
@@ -696,7 +696,7 @@ bool CowFile::trimUnused(_i64 fs_offset, _i64 trim_blocksize, ITrimCallback* tri
 		{
 			if(!setUnused(unused_start, unused_end))
 			{
-				Server->Log("Trimming syscall failed. Stopping trimming (end).", LL_WARNING);
+				Server->Log("Trimming syscall failed. Stopping trimming (end).", LL_DEBUG);
 				return false;
 			}
 			if(trim_callback!=NULL)

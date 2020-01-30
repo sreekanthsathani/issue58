@@ -101,6 +101,7 @@ private:
 	static bool filesystem_transactions_enabled;
 	static bool use_tree_hashing;
 
+
 	static volatile bool update_delete_pending_clients;
 	std::vector<std::string> delete_pending_clients;
 
@@ -111,6 +112,10 @@ private:
 	static std::map<std::string, std::vector<std::string> > virtual_clients;
 
 	static bool can_mount_images;
+
+	// Added by Chandru .. ZFS changes..
+	static bool is_zfs_configured;
+	bool isZFSConfigured();
 };
 
 #endif //URB_SERVER_H

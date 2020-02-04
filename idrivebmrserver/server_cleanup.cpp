@@ -1670,7 +1670,9 @@ void ServerCleanupThread::deletePendingClients(void)
 	{
 		std::string jsonObj = root.stringify(true);
 		ServerLogger::Log(logid, "Jsonsied string for script is " + jsonObj, LL_INFO);
-		if (!ClientMain::run_script("/usr/share/idrivebmr/run", " CleanUp --clients " + jsonObj, logid))
+		std::string cmd = "/usr/share/idrivebmr/run";
+	        std::string params = " CleanUp --clients '" + jsonObj + "'";
+		if (!ClientMain::run_script(cmd, params, logid))
 		{
 			ServerLogger::Log(logid, "Error calling cleanup_clients scripts ", LL_ERROR);
 		}

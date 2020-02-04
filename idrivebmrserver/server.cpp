@@ -811,7 +811,6 @@ void BackupServer::testSnapshotAvailability(IDatabase *db)
 					db_settings->EndTransaction();
 					Server->Log("Shutting down the server as zfs is corrupted!", LL_ERROR);
 					Server->Log("Contact support for further assistance.", LL_ERROR);
-					Server->destroy(db_settings);
 					exit(1);
 				}
 			}
@@ -836,7 +835,6 @@ void BackupServer::testSnapshotAvailability(IDatabase *db)
 	else
 	{
 		db_settings->Write("UPDATE generalKeyValueSettings SET data='GOOD' WHERE name='zfs_dataset_status'");
-		Server->destroy(db_settings);
 	}
 
 	if(image_snapshots_enabled || file_snapshots_enabled)

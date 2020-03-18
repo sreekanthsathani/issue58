@@ -583,7 +583,21 @@ int zfs_test()
 		std::cout << "TEST FAILED: Dataset is not set via /etc/idrivebmr/dataset" << std::endl;
 		return 1;
 	}
-	
+
+	if(!verify_dataset(getBackupfolderPath(mode_zfs)))
+	{
+		std::string output;
+		std::cout << "Dataset not mounted or encrypted. Trying to re-initialize zfs." << std::endl;
+		// zfs_helper reloads the encryption key if unloaded and
+		// mounts images, bmr_nas and vmware datasets
+		int rc = exec_wait("/usr/local/zfs_helper", output, "init-zfs", NULL);
+		if(rc)
+		{
+			std::cout << "Failed to re-initialize zfs." << std::endl;
+			return 1;
+		}
+		std::cout << "Re-initialized zfs successfully!" << std::endl;
+	}
 	std::string clientdir=getBackupfolderPath(mode_zfs)+os_file_sep()+"testA54hj5luZtlorr494";
 	
 	if(create_subvolume(mode_zfs, clientdir)
@@ -687,8 +701,17 @@ int main(int argc, char *argv[])
 		std::string subvolume_folder=backupfolder+os_file_sep()+clientname+os_file_sep()+name;
 		if(!verify_dataset(backupfolder))
 		{
-			std::cout << "dataset not mounted or encrypted" << std::endl;
-			return 1;
+			std::string output;
+			std::cout << "Dataset not mounted or encrypted. Trying to re-initialize zfs." << std::endl;
+			// zfs_helper reloads the encryption key if unloaded and
+			// mounts images, bmr_nas and vmware datasets
+			int rc = exec_wait("/usr/local/zfs_helper", output, "init-zfs", NULL);
+			if(rc)
+			{
+				std::cout << "Failed to re-initialize zfs." << std::endl;
+				return 1;
+			}
+			std::cout << "Re-initialized zfs successfully!" << std::endl;
 		}
 		return create_subvolume(mode, subvolume_folder)?0:1;
 	}

@@ -373,6 +373,24 @@ bool get_mountpoint(int mode, std::string subvolume_folder)
 #endif
 }
 
+bool isZFSConfigured()
+{
+	//If not read the DB to get the info;
+	std::string ret;
+	std::string dbmanager = "/usr/local/DBManager";
+	int rc = exec_wait(dbmanager, ret, "read_zfs_pwd", NULL);
+
+	if (rc != 0 || (ret.find("No zfs pwd set") != std::string::npos))
+	{
+		std::cout << "Encryption is disabled on the BMR server" << std::endl;
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
 int verify_dataset(const std::string& dataset_name)
 {
   std::string values;
@@ -623,19 +641,22 @@ int zfs_test()
 		return 1;
 	}
 
-	if(!verify_dataset(getBackupfolderPath(mode_zfs)))
+	if(isZFSConfigured())
 	{
-		std::string output;
-		std::cout << "Dataset not mounted or encrypted. Trying to re-initialize zfs." << std::endl;
-		// zfs_helper reloads the encryption key if unloaded and
-		// mounts images, bmr_nas and vmware datasets
-		int rc = exec_wait("/usr/local/zfs_helper", output, "init-zfs", NULL);
-		if(rc)
+		if(!verify_dataset(getBackupfolderPath(mode_zfs)))
 		{
-			std::cout << "Failed to re-initialize zfs." << std::endl;
-			return 1;
+			std::string output;
+			std::cout << "Dataset not mounted or encrypted. Trying to re-initialize zfs." << std::endl;
+			// zfs_helper reloads the encryption key if unloaded and
+			// mounts images, bmr_nas and vmware datasets
+			int rc = exec_wait("/usr/local/zfs_helper", output, "init-zfs", NULL);
+			if(rc)
+			{
+				std::cout << "Failed to re-initialize zfs." << std::endl;
+				return 1;
+			}
+			std::cout << "Re-initialized zfs successfully!" << std::endl;
 		}
-		std::cout << "Re-initialized zfs successfully!" << std::endl;
 	}
 	std::string clientdir=getBackupfolderPath(mode_zfs)+os_file_sep()+"testA54hj5luZtlorr494";
 	

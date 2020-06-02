@@ -456,7 +456,6 @@ bool promote_dependencies(const std::string& snapshot, std::vector<std::string>&
 		if( !next(trim(snaps[i]), 0, snap_folder)
 			|| trim(snaps[i]).size()<=snap_folder.size() )
 			continue;
-		
 		std::string stdout;
 		std::string subvolume_folder = snaps[i];
 		int rc=exec_wait(find_zfs_cmd(), stdout, "get", "-H", "-o", "value", "origin", subvolume_folder.c_str(), NULL);
@@ -481,7 +480,27 @@ bool promote_dependencies(const std::string& snapshot, std::vector<std::string>&
 	return true;
 }
 
-bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false)
+bool identify_dependencies(const std::string& snapshot, std::vector<std::string>& dependencies)
+{
+	std::cout << "Searching for dependencies for " << snapshot << std::endl;
+
+	std::string snap_data;
+	int rc = exec_wait(find_zfs_cmd(), snap_data, "get", "-H", "-o", "value", "clones" ,snapshot.c_str(), NULL);
+	if(rc!=0)
+		return false;
+
+	std::cout << snap_data << std::endl;
+	std::vector<std::string> snaps;
+	Tokenize(snap_data, snaps, ",");
+
+	for(size_t i=0;i<snaps.size();++i)
+	{
+		dependencies.push_back(snaps[i]);
+	}
+	return true;
+}
+
+bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, bool checkDependencies=true)
 {
 #ifdef _WIN32
 	return os_remove_nonempty_dir(widen(subvolume_folder));
@@ -513,6 +532,26 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false)
 	}
 	else if(mode==mode_zfs)
 	{
+		//if more than one dependencies for a snapshot.. skip that deletion
+		std::vector<std::string> dependencies;
+		if(checkDependencies)
+                {
+			if(identify_dependencies((subvolume_folder+"@ro"),dependencies))
+			{
+				//if there are more than one or zero dependency then do not remove the snapshot
+				//as there might be virtual machine and incremental clone created at the same time
+				if(dependencies.size() > 1)
+					return false;
+				else
+				//if there is 1 dependency, then check if the clone(dependency) is of virtualized system
+					if(dependencies.size() == 1)
+						if(dependencies[0].find("4096.virtual_machines-4096") != std::string::npos ||
+							dependencies[0].find("4096.-flrmount") != std::string::npos)
+								return false;
+			}
+			else
+				return false;
+		}
 		exec_wait(find_zfs_cmd(), false, "destroy", (subvolume_folder+"@ro").c_str(), NULL);
 		int rc = exec_wait(find_zfs_cmd(), false, "destroy", subvolume_folder.c_str(), NULL);
 		if(rc!=0)
@@ -601,7 +640,7 @@ int zfs_test()
 	std::string clientdir=getBackupfolderPath(mode_zfs)+os_file_sep()+"testA54hj5luZtlorr494";
 	
 	if(create_subvolume(mode_zfs, clientdir)
-		&& remove_subvolume(mode_zfs, clientdir) )
+		&& remove_subvolume(mode_zfs, clientdir, false, false) )
 	{
 		std::cout << "ZFS TEST OK" << std::endl;
 		
@@ -612,7 +651,7 @@ int zfs_test()
 			return 10 + mode_zfs;
 		}
 		else if(create_subvolume(mode_zfs, clientdir)
-			&& remove_subvolume(mode_zfs, clientdir))
+			&& remove_subvolume(mode_zfs, clientdir, false, false))
 		{
 			return 10 + mode_zfs_file;
 		}

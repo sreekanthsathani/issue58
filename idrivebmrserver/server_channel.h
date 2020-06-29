@@ -16,11 +16,9 @@ class ServerChannelThread : public IThread
 {
 public:
 	ServerChannelThread(ClientMain *client_main, const std::string& clientname, int clientid, bool internet_mode, 
-		bool allow_restore,	std::string server_token, const std::string& virtual_client,
-		ServerChannelThread* parent);
+		bool allow_restore, const std::string& identiy, std::string server_token, const std::string& virtual_client);
 	~ServerChannelThread(void);
 
-	void run();
 	void operator()(void);
 
 	std::string processMsg(const std::string &msg);
@@ -57,15 +55,8 @@ private:
 	void DOWNLOAD_DYNAMIC_METADATA(str_map& params);
 	void DOWNLOAD_DISK_LAYOUT(str_map& params);
 
-	void reset();
-
-	bool has_restore_permission(const std::string& clientname, int clientid);
-
 	std::string get_clientname(IDatabase* db, int clientid);
-
-	void add_extra_channel();
-
-	void remove_extra_channel();
+	void reset();
 
 	ClientMain *client_main;
 	IPipe *exitpipe;
@@ -101,7 +92,4 @@ private:
 	std::string server_token;
 
 	std::vector<THREADPOOL_TICKET> fileclient_threads;
-
-	ServerChannelThread* parent;
-	std::vector<ServerChannelThread*> extra_channel_threads;
 };

@@ -34,10 +34,10 @@
 #include <stdlib.h>
 #include "../Interface/Types.h"
 #include <cstring>
-#include "../idrivebmrcommon/sha2/sha2.h"
+#include "../urbackupcommon/sha2/sha2.h"
 #include "../Interface/Pipe.h"
-#include "../idrivebmrcommon/fileclient/tcpstack.h"
-#include "../idrivebmrcommon/mbrdata.h"
+#include "../urbackupcommon/fileclient/tcpstack.h"
+#include "../urbackupcommon/mbrdata.h"
 #include "server_ping.h"
 #include "snapshot_helper.h"
 #include "server.h"
@@ -55,6 +55,7 @@ const int max_num_hash_errors = 10;
 
 extern std::string server_identity;
 extern IFSImageFactory *image_fak;
+
 
 namespace
 {
@@ -131,6 +132,7 @@ std::vector<ImageBackup::SImageDependency> ImageBackup::getDependencies(bool res
 
 bool ImageBackup::doBackup()
 {
+
 	bool cowraw_format = server_settings->getImageFileFormat()==image_file_format_cowraw;
 
 	if(r_incremental)
@@ -280,6 +282,7 @@ bool ImageBackup::doBackup()
 		}
 		else
 		{
+			
 			ret = doImage(letter, last.path, last.incremental+1,
 				cowraw_format?0:last.incremental_ref, image_hashed_transfer, server_settings->getImageFileFormat(),
 				client_main->getProtocolVersions().client_bitmap_version>0,
@@ -288,6 +291,7 @@ bool ImageBackup::doBackup()
 	}
 	else
 	{
+		
 		ret = doImage(letter, "", 0, 0, image_hashed_transfer, server_settings->getImageFileFormat(),
 			      client_main->getProtocolVersions().client_bitmap_version>0,
 			client_main->getProtocolVersions().require_previous_cbitmap>0);
@@ -342,15 +346,30 @@ namespace
 bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParentvhd, int incremental, int incremental_ref,
 	bool transfer_checksum, std::string image_file_format, bool transfer_bitmap, bool transfer_prev_cbitmap)
 {
-	std::string sletter = pLetter;
+	std::string sletter = conv_filename(pLetter);
 	if (pLetter != "SYSVOL" && pLetter != "ESP")
 	{
-		sletter = pLetter[0];
+		if ((pLetter.size() <= 3
+			&& pLetter[1] == ':'
+			&& (pLetter[2] == '\\'
+				|| pLetter[2] == '/'))
+			|| (pLetter.size() <= 2
+				&& pLetter[1] == ':'))
+		{
+			sletter = sletter.substr(0,1);
+		}
 	}
 
+	bool fatal_disk_error;
 	std::string imagefn;
+	std::string metapath;
 	bool fatal_mbr_error;
-	std::string mbrd = getMBR(sletter, fatal_mbr_error);
+	std::string loadfn;
+	bool disk_backup = false;
+	std::string backupdir;
+	
+
+	std::string mbrd = getMBR(sletter, pLetter, pParentvhd.empty(), snapshot_id, fatal_mbr_error, loadfn);
 	if (mbrd.empty())
 	{
 		if (pLetter != "SYSVOL" && pLetter != "ESP")
@@ -363,13 +382,14 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			else
 			{
 				ServerLogger::Log(logid, "Cannot retrieve master boot record (MBR) for the disk from the client. "
-					"Continuing backup but you will not be able to restore this image backup via restore CD.", LL_WARNING);
+					"Continuing backup for dynamic disk and sending mbr with dynamic metadata.", LL_WARNING);
 			}
 		}
 	}
 	else
 	{
-		imagefn = constructImagePath(sletter, image_file_format, pParentvhd);
+		imagefn = constructImagePath(sletter, image_file_format, pParentvhd, &backupdir);
+
 
 		if (imagefn.empty())
 		{
@@ -377,7 +397,122 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			return false;
 		}
 
-		std::auto_ptr<IFile> mbr_file(Server->openFile(os_file_prefix(imagefn + ".mbr"), MODE_WRITE));
+		//delete all text files
+		std::string command = "exec rm -r ";
+		std::string path = backupdir;
+		std::string path1 = "*.txt";
+		command.append(path);
+		command.append(path1);
+		ServerLogger::Log(logid, command, LL_WARNING);
+		system(command.c_str());//doubt about c_str
+
+		//if letter is C then call metadata
+	//	ServerLogger::Log(logid, sletter, LL_WARNING);
+		if (sletter=="C") {
+			std::string metadatad = getMetaData(sletter, pLetter, pParentvhd.empty(), snapshot_id, fatal_disk_error, imagefn);
+			//metapath = constructmetadataPath(sletter, image_file_format, pParentvhd);
+
+			if (metadatad.empty()) {
+				ServerLogger::Log(logid, "Cannot retrieve dynamic metadata for the disk from the client. "
+					"Continuing backup but you will not be able to restore dynamic disk image backup via restore CD.", LL_WARNING);
+			}
+			else {
+				ServerLogger::Log(logid, "downloading disk layout done", LL_INFO);
+				std::auto_ptr<IFsFile> disk_file(Server->openFile(os_file_prefix(imagefn + "_disk_layout.txt"), MODE_WRITE));
+
+				if (disk_file.get() != NULL)
+				{
+					_u32 w = disk_file->Write(metadatad);
+					if (w != metadatad.size())
+					{
+						ServerLogger::Log(logid, "Error writing layout data. " + os_last_error_str(), LL_ERROR);
+						return false;
+					}
+				}
+				else
+				{
+					ServerLogger::Log(logid, "Error creating file for writing meta data. " + os_last_error_str(), LL_ERROR);
+					return false;
+				}
+
+			}
+
+			std::string dynstruct = getdynstruct(sletter, pLetter, pParentvhd.empty(), snapshot_id, fatal_disk_error, imagefn);
+
+			if (dynstruct.empty()) {
+				ServerLogger::Log(logid, "Cannot retrieve dynamic metadata for the disk from the client. "
+					"Continuing backup but you will not be able to restore dynamic disk image backup via restore CD.", LL_WARNING);
+			}
+			else {
+				ServerLogger::Log(logid, "downloading dynamic struct done", LL_INFO);
+				std::auto_ptr<IFsFile> disk_file(Server->openFile(os_file_prefix(imagefn + "_dynamic_disk_struct.txt"), MODE_WRITE));
+
+				if (disk_file.get() != NULL)
+				{
+					_u32 w = disk_file->Write(dynstruct);
+					if (w != dynstruct.size())
+					{
+						ServerLogger::Log(logid, "Error writing dynamic data. " + os_last_error_str(), LL_ERROR);
+						return false;
+					}
+				}
+				else
+				{
+					ServerLogger::Log(logid, "Error creating file for writing dynamic data. " + os_last_error_str(), LL_ERROR);
+					return false;
+				}
+				std::string filename_path = os_file_prefix(imagefn + "_dynamic_disk_struct.txt");
+				std::ifstream ifs(filename_path, std::ios::binary); //taking file as inputstream
+				std::string content;
+				content.assign((std::istreambuf_iterator<char>(ifs)),
+					(std::istreambuf_iterator<char>()));
+				std::string str2("Physical_disk_start");
+				std::string str3("Physical_disk_end");
+
+				std::size_t found = content.find(str2);
+				std::size_t found1 = content.find(str3);
+				char arr[] = "Physical_disk_start_";
+				char arr1[] = "Physical_disk_end_";
+				while (found != std::string::npos)
+				{
+					std::string filenumber = content.substr(found + 20, 1);
+					std::string filename_disk = os_file_prefix(imagefn + "_dynamic_physical_disk_"+filenumber+".txt");
+					std::ofstream file(filename_disk, std::ios::binary);
+					size_t temp = found1 - found;
+					file << content.substr(found + 21, temp - 21);
+					found = content.find(arr, found + 22);
+					found1 = content.find(arr1, found1 + 22);
+					file.close();
+				}
+				ServerLogger::Log(logid, "dynamic disk file created", LL_INFO);
+
+				//for storing mbr files
+			
+				std::string str4("mbr_data_start");
+				std::string str5("mbr_data_end");
+
+				std::size_t found2 = content.find(str4);
+				std::size_t found3 = content.find(str5);
+				char arr2[] = "mbr_data_start_";
+				char arr3[] = "mbr_data_end_";
+				while (found2 != std::string::npos)
+				{
+					std::string filenumber = content.substr(found2 + 15, 1);
+					std::string filename_disk = os_file_prefix(imagefn + "_dynamic_physical_disk_" + filenumber + ".txt");
+					std::ofstream file(filename_disk, std::ios::binary | std::ios::app);
+					size_t temp = found3 - found2;
+					file << content.substr(found2, temp + 14);
+					found2 = content.find(arr2, found2 + 17);
+					found3 = content.find(arr3, found3 + 17);
+					file.close();
+				}
+				ServerLogger::Log(logid, "dynamic disk file created", LL_INFO);
+				ifs.close();
+			}
+		}
+
+		std::auto_ptr<IFsFile> mbr_file(Server->openFile(os_file_prefix(imagefn + ".mbr"), MODE_WRITE));
+
 		if (mbr_file.get() != NULL)
 		{
 			_u32 w = mbr_file->Write(mbrd);
@@ -386,15 +521,120 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 				ServerLogger::Log(logid, "Error writing mbr data. " + os_last_error_str(), LL_ERROR);
 				return false;
 			}
-			mbr_file.reset();
 		}
 		else
 		{
 			ServerLogger::Log(logid, "Error creating file for writing MBR data. " + os_last_error_str(), LL_ERROR);
 			return false;
 		}
+
+		if(!loadfn.empty())
+		{
+			disk_backup = true;
+
+			FileClient fc(false, client_main->getIdentity(), client_main->getProtocolVersions().filesrv_protocol_version,
+				client_main->isOnInternetConnection(), client_main);
+			_u32 rc = client_main->getClientFilesrvConnection(&fc, server_settings.get(), 10000);
+			if (rc != ERR_CONNECTED)
+			{
+				ServerLogger::Log(logid, "Error getting MBR zip data - CONNECT error", LL_ERROR);
+				return false;
+			}
+
+			ServerLogger::Log(logid, clientname + ": Loading MBR zip file...", LL_INFO);
+
+			int64 full_backup_starttime = Server->getTimeMS();
+
+			int64 starttime = Server->getTimeMS();
+
+			IFsFile* tmpf = Server->openTemporaryFile();
+			if (tmpf == NULL)
+			{
+				ServerLogger::Log(logid, "Error opening temporay file for MBR zip load", LL_ERROR);
+				return false;
+			}
+
+			ScopedDeleteFile tmpf_del(tmpf);
+
+			rc = ERR_CANNOT_OPEN_FILE;
+			int retry = 0;
+			while (Server->getTimeMS() - starttime < 5*60 * 1000
+				&& rc== ERR_CANNOT_OPEN_FILE)
+			{
+				rc = fc.GetFile(loadfn, tmpf, true, false, 0, false, 0);
+
+				if (rc != ERR_TIMEOUT
+					&& rc!=ERR_SUCCESS)
+				{
+					if (retry < 3)
+					{
+						Server->wait(1000);
+					}
+					else
+					{
+						Server->wait(20000);
+					}
+					++retry;
+				}
+			}
+
+			if (rc != ERR_SUCCESS)
+			{
+				tmpf->Resize(0, false);
+				tmpf->Seek(0);
+				_u32 rc2 = fc.GetFile(loadfn+".err", tmpf, true, false, 0, false, 0);
+
+				if (rc2 == ERR_SUCCESS
+					&& tmpf->Size()<100*1024*1024)
+				{
+					ServerLogger::Log(logid, "Error loading ZIP file MBR: "+tmpf->Read(0LL, static_cast<_u32>(tmpf->Size()) ), LL_ERROR);
+					return false;
+				}
+				else
+				{
+					ServerLogger::Log(logid, "Error loading ZIP file MBR: "+fc.getErrorString(rc), LL_ERROR);
+					return false;
+				}
+			}
+
+			char buf[1024];
+			tmpf->Seek(0);
+			bool has_read_error=false;
+			while ((rc = tmpf->Read(buf, sizeof(buf), &has_read_error)) > 0)
+			{
+				if (mbr_file->Write(buf, rc) != rc)
+				{
+					ServerLogger::Log(logid, "Error writing to "+mbr_file->getFilename()+". "+os_last_error_str(), LL_ERROR);
+					return false;
+				}
+			}
+
+			if (has_read_error)
+			{
+				ServerLogger::Log(logid, "Error reading from " + tmpf->getFilename() + ". " + os_last_error_str(), LL_ERROR);
+				return false;
+			}
+
+			ServerLogger::Log(logid, clientname + ": Loaded MBR zip file (" + PrettyPrintBytes(tmpf->Size()) + ")", LL_INFO);
+
+			if (snapshot_id == 0)
+			{
+				tmpf->Resize(0, false);
+				tmpf->Seek(0);
+				_u32 rc2 = fc.GetFile(loadfn + ".save_id", tmpf, true, false, 0, false, 0);
+				if (rc2 == ERR_SUCCESS
+					&& tmpf->Size() < 100)
+				{
+					snapshot_id = watoi(tmpf->Read(0LL, static_cast<_u32>(tmpf->Size())));
+				}
+			}
+		}
 	}
 
+	
+
+	
+	
 	ScopedLockImageFromCleanup cleanup_lock(0);
 
 	if (!addBackupToDatabase(pLetter, pParentvhd, incremental,
@@ -881,7 +1121,8 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 
 					if (imagefn.empty())
 					{
-						imagefn = constructImagePath(sletter, image_file_format, pParentvhd);
+						std::string temppath;
+						imagefn = constructImagePath(sletter, image_file_format, pParentvhd, &temppath);
 
 						if (imagefn.empty())
 						{
@@ -972,15 +1213,18 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 						ServerStatus::setProcessTotalBytes(clientname, status_id, blockcnt*blocksize);
 					}
 
-					mbr_offset=writeMBR(vhdfile, drivesize);
-					if( mbr_offset==0 )
+					if (!disk_backup)
 					{
-						ServerLogger::Log(logid, "Error writing image MBR", LL_ERROR);
-						goto do_image_cleanup;
-					}
-					else
-					{
-						vhdfile->setMbrOffset(mbr_offset);
+						mbr_offset = writeMBR(vhdfile, drivesize);
+						if (mbr_offset == 0)
+						{
+							ServerLogger::Log(logid, "Error writing image MBR", LL_ERROR);
+							goto do_image_cleanup;
+						}
+						else
+						{
+							vhdfile->setMbrOffset(mbr_offset);
+						}
 					}
 				}
 				else
@@ -1900,7 +2144,7 @@ int64 ImageBackup::updateNextblock(int64 nextblock, int64 currblock, sha256_ctx 
 	return nextblock+1;
 }
 
-std::string ImageBackup::constructImagePath(const std::string &letter, std::string image_file_format, std::string pParentvhd)
+std::string ImageBackup::constructImagePath(const std::string &letter, std::string image_file_format, std::string pParentvhd, std::string* backupdir)
 {
 	bool full_backup = pParentvhd.empty();
 
@@ -1922,6 +2166,7 @@ std::string ImageBackup::constructImagePath(const std::string &letter, std::stri
 	std::string backupfolder_uncompr=server_settings->getSettings()->backupfolder_uncompr;
 	backuppath_single = std::string(buffer) + "_Image_" + letter;
 	std::string image_folder = backupfolder_uncompr + os_file_sep() + clientname + os_file_sep() + backuppath_single;
+	*backupdir = image_folder + os_file_sep();
 	std::string imgpath = image_folder + os_file_sep() + "Image_"+letter+"_"+(std::string)buffer;
 	bool create_folder = true;
 	if(image_file_format==image_file_format_vhd)
@@ -1932,7 +2177,11 @@ std::string ImageBackup::constructImagePath(const std::string &letter, std::stri
 	{
 		imgpath+=".raw";
 		create_folder = false;
-		if (full_backup)
+		if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_None)
+		{
+			create_folder = true;
+		}
+		else if (full_backup)
 		{
 			if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_Zfs)
 			{
@@ -1998,63 +2247,84 @@ std::string ImageBackup::constructImagePath(const std::string &letter, std::stri
 		std::string parent_backuppath_single = ExtractFileName(ExtractFilePath(pParentvhd));
 		std::string parent_fn = ExtractFileName(pParentvhd);
 
-		if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_Zfs)
+		if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_None)
 		{
-			std::auto_ptr<IFile> touch_f(Server->openFile(image_folder, MODE_WRITE));
-			if(touch_f.get()==NULL)
+			if (!os_create_hardlink(imgpath, pParentvhd,
+				true, NULL))
 			{
-				ServerLogger::Log(logid, "Could not touch file " + image_folder + ". "+os_last_error_str(), LL_ERROR);
+				ServerLogger::Log(logid, "Could not reflink \"" + pParentvhd + "\" to \""
+					+ imgpath + "\". "+os_last_error_str(), LL_ERROR);
 				return std::string();
 			}
-			touch_f->Sync();
-		}
 
-		ServerLogger::Log(logid, "Creating writable snapshot of previous image backup...", LL_INFO);
-		std::string errmsg;
-		if (!SnapshotHelper::snapshotFileSystem(true, clientname, parent_backuppath_single, backuppath_single, errmsg))
-		{
-			errmsg = trim(errmsg);
-			ServerLogger::Log(logid, "Could not create snapshot of previous image backup at " + parent_backuppath_single
-				+ (errmsg.empty() ? "" : (" \"" + errmsg + "\"")), LL_ERROR);
-			if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_Zfs)
+			if (!os_create_hardlink(imgpath+".bitmap", pParentvhd+".bitmap",
+				true, NULL))
 			{
-				Server->deleteFile(image_folder);
+				ServerLogger::Log(logid, "Could not reflink \"" + pParentvhd + ".bitmap\" to \""
+					+ imgpath + ".bitmap\". " + os_last_error_str(), LL_ERROR);
+				return std::string();
 			}
-			return std::string();
 		}
 		else
 		{
 			if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_Zfs)
 			{
-				std::string mountpoint = SnapshotHelper::getMountpoint(true, clientname, backuppath_single);
-				if (mountpoint.empty())
+				std::auto_ptr<IFile> touch_f(Server->openFile(image_folder, MODE_WRITE));
+				if (touch_f.get() == NULL)
 				{
-					ServerLogger::Log(logid, "Could not find mountpoint of snapshot of client " + clientname+ " path "+ backuppath_single, LL_ERROR);
+					ServerLogger::Log(logid, "Could not touch file " + image_folder + ". " + os_last_error_str(), LL_ERROR);
 					return std::string();
 				}
-
-				if (!os_link_symbolic(mountpoint, image_folder+"_new"))
-				{
-					ServerLogger::Log(logid, "Could create symlink to mountpoint at " + image_folder + " to " + mountpoint+". "+os_last_error_str(), LL_ERROR);
-					return std::string();
-				}
-
-				if (!os_rename_file(image_folder + "_new", image_folder))
-				{
-					ServerLogger::Log(logid, "Could rename symlink at " + image_folder + "_new to " + image_folder + ". " + os_last_error_str(), LL_ERROR);
-					return std::string();
-				}
+				touch_f->Sync();
 			}
 
-			Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".hash");
-			Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".cbitmap");
-			Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".mbr");
-			Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".sync");
-			os_rename_file(image_folder + os_file_sep() + parent_fn + ".bitmap", imgpath+".bitmap");
-			if (!os_rename_file(image_folder + os_file_sep() + parent_fn, imgpath))
+			ServerLogger::Log(logid, "Creating writable snapshot of previous image backup...", LL_INFO);
+			std::string errmsg;
+			if (!SnapshotHelper::snapshotFileSystem(true, clientname, parent_backuppath_single, backuppath_single, errmsg))
 			{
-				ServerLogger::Log(logid, "Error renaming in snapshot (\"" + image_folder + os_file_sep() + parent_fn + "\" to \""+imgpath+"\")", LL_ERROR);
+				errmsg = trim(errmsg);
+				ServerLogger::Log(logid, "Could not create snapshot of previous image backup at " + parent_backuppath_single
+					+ (errmsg.empty() ? "" : (" \"" + errmsg + "\"")), LL_ERROR);
+				if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_Zfs)
+				{
+					Server->deleteFile(image_folder);
+				}
 				return std::string();
+			}
+			else
+			{
+				if (BackupServer::getSnapshotMethod(true) == BackupServer::ESnapshotMethod_Zfs)
+				{
+					std::string mountpoint = SnapshotHelper::getMountpoint(true, clientname, backuppath_single);
+					if (mountpoint.empty())
+					{
+						ServerLogger::Log(logid, "Could not find mountpoint of snapshot of client " + clientname + " path " + backuppath_single, LL_ERROR);
+						return std::string();
+					}
+
+					if (!os_link_symbolic(mountpoint, image_folder + "_new"))
+					{
+						ServerLogger::Log(logid, "Could create symlink to mountpoint at " + image_folder + " to " + mountpoint + ". " + os_last_error_str(), LL_ERROR);
+						return std::string();
+					}
+
+					if (!os_rename_file(image_folder + "_new", image_folder))
+					{
+						ServerLogger::Log(logid, "Could rename symlink at " + image_folder + "_new to " + image_folder + ". " + os_last_error_str(), LL_ERROR);
+						return std::string();
+					}
+				}
+
+				Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".hash");
+				Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".cbitmap");
+				Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".mbr");
+				Server->deleteFile(image_folder + os_file_sep() + parent_fn + ".sync");
+				os_rename_file(image_folder + os_file_sep() + parent_fn + ".bitmap", imgpath + ".bitmap");
+				if (!os_rename_file(image_folder + os_file_sep() + parent_fn, imgpath))
+				{
+					ServerLogger::Log(logid, "Error renaming in snapshot (\"" + image_folder + os_file_sep() + parent_fn + "\" to \"" + imgpath + "\")", LL_ERROR);
+					return std::string();
+				}
 			}
 		}
 	}
@@ -2072,6 +2342,7 @@ std::string ImageBackup::constructImagePath(const std::string &letter, std::stri
 
 	return imgpath;
 }
+
 
 SBackup ImageBackup::getLastImage(const std::string &letter, bool incr)
 {
@@ -2103,10 +2374,29 @@ SBackup ImageBackup::getLastImage(const std::string &letter, bool incr)
 	}
 }
 
-std::string ImageBackup::getMBR(const std::string &dl, bool& fatal_error)
+std::string ImageBackup::getMBR(const std::string &dl, const std::string& disk_path,
+	bool image_full, int64 snapshot_id, bool& fatal_error, std::string& loadfn)
 {
 	fatal_error = true;
-	std::string ret=client_main->sendClientMessage("MBR driveletter="+dl, "Getting MBR for drive "+dl+" failed", 10000);
+	std::string params = "driveletter=" + EscapeParamString(dl);
+
+	if (!clientsubname.empty())
+	{
+		params += "&clientsubname=" + EscapeParamString(clientsubname);
+	}
+
+	params += "&disk_path=" + EscapeParamString(disk_path);
+
+	if (snapshot_id != 0)
+	{
+		params += "&shadowid=" + convert(snapshot_id);
+	}
+
+	params += std::string("&image_full=") + (image_full ? "1" : "0");
+	params += "&running_jobs=" + convert(ServerStatus::numRunningJobs(clientname));
+	params += "&token=" + EscapeParamString(server_token);
+
+	std::string ret=client_main->sendClientMessage("MBR "+ params, "Getting MBR for drive "+dl+" failed", 10000);
 	CRData r(&ret);
 	char b;
 	if(r.getChar(&b) && b==1 )
@@ -2114,9 +2404,18 @@ std::string ImageBackup::getMBR(const std::string &dl, bool& fatal_error)
 		char ver;
 		if(r.getChar(&ver) )
 		{
-			if(ver!=0 && ver!=1)
+			std::string zipfn;
+			if(ver!=0 && ver!=1
+				&& ver!=100)
 			{
 				ServerLogger::Log(logid, "MBR version "+convert((int)ver)+" is not supported by this server", LL_ERROR);
+			}
+			else if (ver == 100
+				&& r.getStr2(&zipfn))
+			{
+				ServerLogger::Log(logid, "Loading ZIP metadata from "+zipfn, LL_INFO);
+				loadfn = zipfn;
+				return ret.substr(0,2);
 			}
 			else
 			{
@@ -2136,20 +2435,83 @@ std::string ImageBackup::getMBR(const std::string &dl, bool& fatal_error)
 	}
 	else if(dl!="SYSVOL" && dl!="ESP")
 	{
+		
+		bool dontbreak = true;
 		std::string errmsg;
 		if( r.getStr(&errmsg) && !errmsg.empty())
 		{
 			if (errmsg.find("dynamic volume")!=std::string::npos)
 			{
+				dontbreak = false;
 				fatal_error = false;
 			}
 
 			errmsg=". Error message: "+errmsg;
 		}
-		ServerLogger::Log(logid, "Could not read MBR"+errmsg, LL_ERROR);
+		if (dontbreak) {
+				ServerLogger::Log(logid, "Could not read MBR"+errmsg, LL_ERROR);
+		}
+		else {
+			ServerLogger::Log(logid, "Could not read MBR" + errmsg, LL_WARNING);
+		}
+
 	}
 
 	return "";
+}
+
+std::string ImageBackup::getMetaData(const std::string & dl, const std::string & disk_path, bool image_full, int64 snapshot_id, bool & fatal_error, std::string & imagefn)   
+{
+	ServerLogger::Log(logid, "downloading disk layout ", LL_INFO);
+	fatal_error = true;
+
+	std::string params = "driveletter=" + EscapeParamString(dl);
+
+	if (!clientsubname.empty())
+	{
+		params += "&clientsubname=" + EscapeParamString(clientsubname);
+	}
+
+	params += "&disk_path=" + EscapeParamString(disk_path);
+
+	if (snapshot_id != 0)
+	{
+		params += "&shadowid=" + convert(snapshot_id);
+	}
+
+	params += std::string("&image_full=") + (image_full ? "1" : "0");
+	params += "&running_jobs=" + convert(ServerStatus::numRunningJobs(clientname));
+	params += "&token=" + EscapeParamString(server_token);
+	std::string ret = client_main->sendClientMessage("METADATA "+ params, "Getting Metadata for drive " + dl + " failed", 60000);
+	//ServerLogger::Log(logid, ret, LL_WARNING);
+	return ret;
+}
+
+std::string ImageBackup::getdynstruct(const std::string & dl, const std::string & disk_path, bool image_full, int64 snapshot_id, bool & fatal_error, std::string & imagefn)
+{
+	ServerLogger::Log(logid, "downloading dynamic structure ", LL_INFO);
+	fatal_error = true;
+
+	std::string params = "driveletter=" + EscapeParamString(dl);
+
+	if (!clientsubname.empty())
+	{
+		params += "&clientsubname=" + EscapeParamString(clientsubname);
+	}
+
+	params += "&disk_path=" + EscapeParamString(disk_path);
+
+	if (snapshot_id != 0)
+	{
+		params += "&shadowid=" + convert(snapshot_id);
+	}
+
+	params += std::string("&image_full=") + (image_full ? "1" : "0");
+	params += "&running_jobs=" + convert(ServerStatus::numRunningJobs(clientname));
+	params += "&token=" + EscapeParamString(server_token);
+	std::string ret = client_main->sendClientMessage("DSTRUCT " + params, "Getting structure for drive " + dl + " failed", 10000);
+	//ServerLogger::Log(logid, ret, LL_WARNING);
+	return ret;
 }
 
 bool ImageBackup::runPostBackupScript(bool incr, const std::string& path, const std::string &pLetter, bool success)
@@ -2164,7 +2526,7 @@ bool ImageBackup::runPostBackupScript(bool incr, const std::string& path, const 
 		script_name = "post_incr_imagebackup";
 	}
 
-	return ClientMain::run_script("idrivebmr" + os_file_sep() + script_name,
+	return ClientMain::run_script("urbackup" + os_file_sep() + script_name,
 		"\""+ path+"\" \"" + pLetter + "\" " + (success ? "1" : "0"), logid);
 }
 

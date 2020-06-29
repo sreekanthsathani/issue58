@@ -1,8 +1,8 @@
 #include "../Interface/Thread.h"
 #include "../Interface/Pipe.h"
 #include "../Interface/Mutex.h"
-#include "../urbackupcommon/fileclient/socket_header.h"
-#include "../urbackupcommon/fileclient/tcpstack.h"
+#include "../idrivebmrcommon/fileclient/socket_header.h"
+#include "../idrivebmrcommon/fileclient/tcpstack.h"
 
 class ClientMain;
 class IDatabase;

@@ -24,12 +24,12 @@
 #include "database.h"
 #include "ClientMain.h"
 #include "../stringtools.h"
-#include "../urbackupcommon/os_functions.h"
+#include "../idrivebmrcommon/os_functions.h"
 #include "../fsimageplugin/IFSImageFactory.h"
 #include "../fsimageplugin/IVHDFile.h"
 #include "server_status.h"
 #include "server_settings.h"
-#include "../urbackupcommon/capa_bits.h"
+#include "../idrivebmrcommon/capa_bits.h"
 #include "serverinterface/helper.h"
 #include "serverinterface/login.h"
 #include <memory.h>
@@ -40,7 +40,7 @@
 #include "restore_client.h"
 #include "serverinterface/backups.h"
 #include "dao/ServerBackupDao.h"
-#include "../urbackupcommon/mbrdata.h"
+#include "../idrivebmrcommon/mbrdata.h"
 
 const unsigned short serviceport=35623;
 extern IFSImageFactory *image_fak;
@@ -187,7 +187,7 @@ void ServerChannelThread::run()
 	int64 lastpingtime=0;
 	lasttime=0;
 
-	settings=new ServerSettings(Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER), clientid);
+	settings=new ServerSettings(Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER), clientid);
 	ScopedFreeObjRef<ServerSettings*> settings_free(settings);
 
 	std::string curr_ident;
@@ -422,7 +422,7 @@ std::string ServerChannelThread::processMsg(const std::string &msg)
 		add_extra_channel();
 		DOWNLOAD_IMAGE(params);
 		remove_extra_channel();
-		Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER)->destroyAllQueries();
+		Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER)->destroyAllQueries();
 
 		{
 			IScopedLock lock(mutex);
@@ -721,7 +721,7 @@ int ServerChannelThread::getLastBackupid(IDatabase* db)
 
 void ServerChannelThread::GET_BACKUPCLIENTS(void)
 {
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	std::string t_where="";
 	if(!all_client_rights)
@@ -745,7 +745,7 @@ void ServerChannelThread::GET_BACKUPCLIENTS(void)
 
 void ServerChannelThread::GET_BACKUPIMAGES(const std::string& clientname)
 {
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 	//TODO language
 	IQuery *q=db->Prepare("SELECT backupid AS id, strftime('%s', backuptime) AS timestamp, strftime('%Y-%m-%d %H:%M',backuptime,'localtime') AS backuptime, letter, clientid FROM ((SELECT id AS backupid, clientid, backuptime, letter, complete FROM backup_images) c INNER JOIN (SELECT id FROM clients WHERE name=?) b ON c.clientid=b.id) a WHERE a.complete=1 AND a.letter!='SYSVOL' AND a.letter!='ESP' ORDER BY backuptime DESC");
 	q->Bind(clientname);
@@ -784,7 +784,7 @@ void ServerChannelThread::GET_BACKUPIMAGES(const std::string& clientname)
 
 void ServerChannelThread::GET_FILE_BACKUPS( const std::string& clientname )
 {
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 	IQuery *q=db->Prepare("SELECT backupid AS id, strftime('%s', backuptime) AS timestamp, strftime('%Y-%m-%d %H:%M',backuptime,'localtime') AS backuptime, clientid, tgroup FROM "
 		"((SELECT id AS backupid, clientid, backuptime, complete, tgroup FROM backups) c INNER JOIN (SELECT id FROM clients WHERE name=?) b ON c.clientid=b.id) a "
 		"WHERE a.complete=1 ORDER BY backuptime DESC");
@@ -815,7 +815,7 @@ void ServerChannelThread::GET_FILE_BACKUPS( const std::string& clientname )
 
 void ServerChannelThread::GET_FILE_BACKUPS_TOKENS(str_map& params)
 {
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	if(params.find("token_data")!=params.end())
 	{
@@ -858,7 +858,7 @@ void ServerChannelThread::GET_FILE_BACKUPS_TOKENS(str_map& params)
 
 void ServerChannelThread::GET_FILE_LIST_TOKENS(str_map& params)
 {
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	if(params.find("token_data")!=params.end())
 	{
@@ -951,7 +951,7 @@ namespace
 
 void ServerChannelThread::DOWNLOAD_IMAGE(str_map& params)
 {
-	IDatabase *db = Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	const _u32 img_send_timeout = 30000;
 
@@ -1242,7 +1242,7 @@ void ServerChannelThread::DOWNLOAD_FILES( str_map& params )
 {
 	int backupid=watoi(params["backupid"])-img_id_offset;
 
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 	IQuery *q=db->Prepare("SELECT clientid FROM backups WHERE id=? AND strftime('%s', backuptime)=?");
 	q->Bind(backupid);
 	q->Bind(params["time"]);
@@ -1309,7 +1309,7 @@ void ServerChannelThread::DOWNLOAD_FILES( str_map& params )
 
 void ServerChannelThread::DOWNLOAD_FILES_TOKENS(str_map& params)
 {
-	IDatabase *db=Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	if (params.find("token_data") != params.end())
 	{
@@ -1474,7 +1474,7 @@ void ServerChannelThread::RESTORE_DONE( str_map params )
 	int64 restore_id = watoi64(params["id"]);
 	bool success = params["success"]=="true";
 
-	IDatabase* db = Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase* db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 	ServerBackupDao backup_dao(db);
 
 	ServerBackupDao::CondString restore_ident = backup_dao.getRestoreIdentity(restore_id, clientid);
@@ -1567,7 +1567,7 @@ std::string ServerChannelThread::get_clientname(IDatabase* db, int clientid)
 void ServerChannelThread::DOWNLOAD_DYNAMIC_METADATA(str_map& params) {
 
 
-	IDatabase *db = Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	const _u32 img_send_timeout = 30000;
 
@@ -1636,7 +1636,7 @@ void ServerChannelThread::DOWNLOAD_DYNAMIC_METADATA(str_map& params) {
 
 void ServerChannelThread::DOWNLOAD_DISK_LAYOUT(str_map& params) {
 
-	IDatabase *db = Server->getDatabase(Server->getThreadID(), URBACKUPDB_SERVER);
+	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
 	const _u32 img_send_timeout = 30000;
 

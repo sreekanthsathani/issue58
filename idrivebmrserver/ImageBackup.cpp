@@ -34,10 +34,10 @@
 #include <stdlib.h>
 #include "../Interface/Types.h"
 #include <cstring>
-#include "../urbackupcommon/sha2/sha2.h"
+#include "../idrivebmrcommon/sha2/sha2.h"
 #include "../Interface/Pipe.h"
-#include "../urbackupcommon/fileclient/tcpstack.h"
-#include "../urbackupcommon/mbrdata.h"
+#include "../idrivebmrcommon/fileclient/tcpstack.h"
+#include "../idrivebmrcommon/mbrdata.h"
 #include "server_ping.h"
 #include "snapshot_helper.h"
 #include "server.h"
@@ -2526,7 +2526,7 @@ bool ImageBackup::runPostBackupScript(bool incr, const std::string& path, const 
 		script_name = "post_incr_imagebackup";
 	}
 
-	return ClientMain::run_script("urbackup" + os_file_sep() + script_name,
+	return ClientMain::run_script("idrivebmr" + os_file_sep() + script_name,
 		"\""+ path+"\" \"" + pLetter + "\" " + (success ? "1" : "0"), logid);
 }
 

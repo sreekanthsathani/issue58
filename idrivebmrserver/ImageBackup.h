@@ -1,7 +1,7 @@
 #pragma once
 #include "Backup.h"
 #include "../Interface/Types.h"
-#include "../urbackupcommon/sha2/sha2.h"
+#include "../idrivebmrcommon/sha2/sha2.h"
 #include "server_status.h"
 
 

@@ -87,6 +87,17 @@ public:
 		int report_sendonly;
 	};
 
+	struct SBackupImageInfo
+	{
+		bool exists;
+		int64 id;
+		std::string path;
+		int64 backuptime;
+		int incremental;
+		std::string letter;
+		int complete;
+		int clientId;
+	};
 
 	void addToOldBackupfolders(const std::string& backupfolder);
 	std::vector<std::string> getOldBackupfolders(void);
@@ -120,6 +131,7 @@ public:
 	CondString getUserRight(int clientid, const std::string& t_domain);
 	SReportSettings getUserReportSettings(int userid);
 	CondString formatUnixtime(int64 unixtime);
+	CondString formatUnixtimeUTC(int64 unixtime);
 	SImageBackup getLastFullImage(int clientid, int image_version, const std::string& letter);
 	SImageBackup getLastImage(int clientid, int image_version, const std::string& letter);
 	bool newImageBackup(int clientid, const std::string& path, int incremental, int incremental_ref, int image_version, const std::string& letter, int64 backuptime);
@@ -160,6 +172,7 @@ public:
 	void setImageUnmounted(int backupid);
 	SMountedImage getMountedImage(int backupid);
 	std::vector<SMountedImage> getOldMountedImages(int64 times);
+        std::vector<SBackupImageInfo> getBackupInfo(std::vector<int> backupId);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -204,6 +217,7 @@ private:
 	IQuery* q_getUserRight;
 	IQuery* q_getUserReportSettings;
 	IQuery* q_formatUnixtime;
+	IQuery* q_formatUnixtimeUTC;
 	IQuery* q_getLastFullImage;
 	IQuery* q_getLastImage;
 	IQuery* q_newImageBackup;

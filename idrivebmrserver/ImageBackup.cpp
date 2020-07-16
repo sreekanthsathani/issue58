@@ -403,6 +403,8 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 		ServerLogger::Log(logid, "Error creating image backup row in database", LL_ERROR);
 		return false;
 	}
+	if(!imagefn.empty())
+		client_main->UpdateCloudVirtualization(backupid);
 
 	CTCPStack tcpstack(client_main->isOnInternetConnection());
 	IPipe *cc=client_main->getClientCommandConnection(server_settings.get(), 10000);
@@ -894,6 +896,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 							ServerLogger::Log(logid, "Error creating image backup row in database -2", LL_ERROR);
 							goto do_image_cleanup;
 						}
+						client_main->UpdateCloudVirtualization(backupid);
 					}
 
 					IFSImageFactory::ImageFormat image_format;

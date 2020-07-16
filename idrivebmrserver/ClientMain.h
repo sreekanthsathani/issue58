@@ -171,6 +171,7 @@ public:
 
 	static void destroyTemporaryFile(IFile *tmp);
 
+	bool UpdateCloudVirtualization(int backupId);
 	
 	
 	virtual void log_progress( const std::string& fn, int64 total, int64 downloaded, int64 speed_bps );
@@ -241,6 +242,7 @@ public:
 
 	static std::string normalizeVolumeUpper(std::string volume);
 
+
 private:
 	void unloadSQL(void);
 	void prepareSQL(void);
@@ -287,6 +289,8 @@ private:
 	static void cleanupShare(SShareCleanup& tocleanup);
 
 	void finishFailedRestore(std::string restore_identity, logid_t log_id, int64 status_id, int64 restore_id);
+	bool JsonizeRetrievedData(std::vector<int> backupInfo);
+	bool GetIntegrityStatus(std::map<std::string, std::string> drivePath);
 
 	std::string curr_image_format;
 
@@ -393,4 +397,6 @@ private:
 	volatile bool update_capa;
 
 	volatile bool do_reauthenticate;
+
+	std::vector<int> allBackupsInDatabase;
 };

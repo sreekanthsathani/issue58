@@ -54,6 +54,7 @@
 #include <math.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "create_files_index.h"
 #include <stack>
 #include "FullFileBackup.h"
@@ -63,6 +64,7 @@
 #include "ThrottleUpdater.h"
 #include "../fileservplugin/IFileServ.h"
 #include "DataplanDb.h"
+#include "../idrivebmrcommon/json.h"
 
 extern IUrlFactory *url_fak;
 extern ICryptoFactory *crypto_fak;
@@ -479,6 +481,7 @@ void ClientMain::operator ()(void)
 					{
 						ServerStatus::subRunningJob(clientmainname);
 
+
 						if (!backup_queue[i].backup->getResult() &&
 							backup_queue[i].backup->shouldBackoff())
 						{
@@ -519,6 +522,7 @@ void ClientMain::operator ()(void)
 								for (size_t j = 0; j < running_image_groups.size();)
 								{
 									{
+
 										std::map<ImageBackup*, bool>::iterator it = running_image_groups[j].find(ibackup);
 										if (it != running_image_groups[j].end())
 										{
@@ -533,13 +537,14 @@ void ClientMain::operator ()(void)
 									for (std::map<ImageBackup*, bool>::iterator it = running_image_groups[j].begin();
 										it != running_image_groups[j].end(); ++it)
 									{
+
 										if (!it->second)
 										{
-											finished = false;
+											finished = false; //running_image_groups is false
 										}
 										else if (!it->first->getResult())
 										{
-											success = false;
+											success = false;//do_backup() fails for a drive
 										}
 									}
 
@@ -566,6 +571,8 @@ void ClientMain::operator ()(void)
 							}
 						}
 
+
+
 						if (del_backup)
 						{
 							delete backup_queue[i].backup;
@@ -573,6 +580,16 @@ void ClientMain::operator ()(void)
 
 						send_logdata = true;
 						backup_queue.erase(backup_queue.begin() + i);
+						if(backup_queue.empty() || count_image_backup_try )
+						{
+							int64 cpassed_time_s;
+							for(int i=0; i<allBackupsInDatabase.size(); i++)
+								Server->Log("BackupIds : " + convert(allBackupsInDatabase[i]), LL_INFO);
+							if (allBackupsInDatabase.size())
+								JsonizeRetrievedData(allBackupsInDatabase);
+							allBackupsInDatabase.clear();
+							//Server->Log("Clearing allBackupsInDatabase", LL_INFO);
+						}
 						continue;
 					}
 				}
@@ -997,6 +1014,108 @@ void ClientMain::operator ()(void)
 	Server->Log("client_main Thread for client "+clientname+" finished");
 
 	delete this;
+}
+
+bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
+{
+	std::vector<std::string> paths;
+	JSON::Object recoveryId;
+	JSON::Array backupDetail;
+
+	int64 backupTime = 0;
+	std::string timeStr;
+
+	std::vector<ServerBackupDao::SBackupImageInfo>
+		backupInfo = backup_dao->getBackupInfo(backupIds);
+
+	bool completeStatus = true;
+	int clientid = -1;
+	std::map<std::string, std::string> drivesPaths;
+
+	//ToBe tested
+	if(!backupInfo.size()) completeStatus = false;
+
+	for ( int i = 0; i < backupInfo.size(); i++)
+	{
+		std::string letter = backupInfo[i].letter;
+		if(clientid == -1)
+			clientid = backupInfo[i].clientId;
+		else
+			clientid = (clientid == backupInfo[i].clientId) ? clientid : -1;
+
+		if(!backupTime && (letter != "SYSVOL" && letter != "ESP"))
+		{
+			timeStr.clear();
+			backupTime = backupInfo[i].backuptime;
+			timeStr = backup_dao->formatUnixtimeUTC(backupTime).value;
+		}
+
+		completeStatus = completeStatus & backupInfo[i].complete;
+		drivesPaths.insert(std::pair<std::string, std::string>(backupInfo[i].letter, backupInfo[i].path));
+
+		JSON::Object backupobj;
+		backupobj.set("drive", letter);
+		backupobj.set("path", backupInfo[i].path);
+		backupobj.set("backup_type", backupInfo[i].incremental ? "Incremental" : "Full");
+		backupDetail.add(backupobj);
+	}
+
+	recoveryId.set("recoveryID", timeStr);
+	recoveryId.set("status", completeStatus ? "Success" : "Failed");
+	if(completeStatus)
+		recoveryId.set("integrity", GetIntegrityStatus(drivesPaths) ? "Good" : "Bad");
+	else
+		recoveryId.set("integrity", "Bad");
+	recoveryId.set("backups", backupDetail);
+	recoveryId.set("clientId", convert(clientid));
+	Server->Log("JsonString to postinstallscript " + recoveryId.stringify(false), LL_INFO);
+
+	if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + recoveryId.stringify(true) + "\'", logid))
+	{
+		Server->Log("Error in postbackup.py script", LL_ERROR);
+	}
+
+}
+
+bool ClientMain::GetIntegrityStatus(std::map<std::string, std::string> drivespaths)
+{
+	std::string mount_point = "/tmp/test";
+	mkdir(mount_point.c_str(), 0777);
+	std::string filesysType = "lowntfs-3g";
+	std::string backedUpFile = "";
+	for(std::map<std::string, std::string>::iterator it = drivespaths.begin();
+			it != drivespaths.end(); ++it)
+	{
+		backedUpFile = it->second;
+		if(it->first == "ESP")
+			filesysType = "vfat";
+
+		int rc = system(("sudo mount -t " + filesysType + " -o loop,offset=524288,ro,noexec " + backedUpFile + " " + mount_point).c_str());
+
+		if(it->first == "SYSVOL" && rc != 0){
+		       	filesysType = "vfat";	
+			rc = system(("sudo mount -t " + filesysType + " -o loop,offset=524288,ro,noexec " + backedUpFile + " " + mount_point).c_str());
+		}
+
+		if(rc!=0)
+		{
+			Server->Log("Backup integrity check failed. " + backedUpFile, LL_WARNING);
+			return false;
+		}
+		else
+		{
+			rc = system(("sudo umount -l " + backedUpFile).c_str());
+			if(rc)
+			{
+				Server->Log("Unmount Failed " + backedUpFile);
+				return false;
+			}
+			Server->Log("PASSED backup integrity check for " + backedUpFile, LL_INFO);
+		}
+		filesysType = "lowntfs-3g";
+	}
+	rmdir(mount_point.c_str());
+	return true;
 }
 
 void ClientMain::prepareSQL(void)
@@ -2835,7 +2954,6 @@ bool ClientMain::run_script( std::string name, const std::string& params, logid_
 #ifdef _WIN32
 	name = name + ".bat";
 #endif
-
 	if(!FileExists(name))
 	{
 		ServerLogger::Log(logid, "Script does not exist "+name, LL_DEBUG);
@@ -3366,5 +3484,12 @@ bool ClientMain::authenticateIfNeeded(bool retry_exit, bool force)
 	}
 	while(c);
 
+	return true;
+}
+
+
+bool ClientMain::UpdateCloudVirtualization(int backupId)
+{
+	allBackupsInDatabase.push_back(backupId);
 	return true;
 }

@@ -752,6 +752,31 @@ ServerBackupDao::SReportSettings ServerBackupDao::getUserReportSettings(int user
 
 /**
 * @-SQLGenAccess
+* @func string ServerBackupDao::formatUnixtimeUTC
+* @return string time
+* @sql
+*       SELECT datetime(:unixtime(int64), 'unixepoch') AS time
+*/
+ServerBackupDao::CondString ServerBackupDao::formatUnixtimeUTC(int64 unixtime)
+{
+	if(q_formatUnixtimeUTC==NULL)
+	{
+		q_formatUnixtimeUTC=db->Prepare("SELECT datetime(?, 'unixepoch') AS time", false);
+	}
+	q_formatUnixtimeUTC->Bind(unixtime);
+	db_results res=q_formatUnixtimeUTC->Read();
+	q_formatUnixtimeUTC->Reset();
+	CondString ret = { false, "" };
+	if(!res.empty())
+	{
+		ret.exists=true;
+		ret.value=res[0]["time"];
+	}
+	return ret;
+}
+
+/**
+* @-SQLGenAccess
 * @func string ServerBackupDao::formatUnixtime
 * @return string time
 * @sql
@@ -1713,6 +1738,7 @@ void ServerBackupDao::prepareQueries( void )
 	q_getUserRight=NULL;
 	q_getUserReportSettings=NULL;
 	q_formatUnixtime=NULL;
+	q_formatUnixtimeUTC=NULL;
 	q_getLastFullImage=NULL;
 	q_getLastImage=NULL;
 	q_newImageBackup=NULL;
@@ -1790,6 +1816,7 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_getUserRight);
 	db->destroyQuery(q_getUserReportSettings);
 	db->destroyQuery(q_formatUnixtime);
+	db->destroyQuery(q_formatUnixtimeUTC);
 	db->destroyQuery(q_getLastFullImage);
 	db->destroyQuery(q_getLastImage);
 	db->destroyQuery(q_newImageBackup);
@@ -1843,4 +1870,46 @@ void ServerBackupDao::updateOrInsertSetting( int clientid, const std::string& ke
 	{
 		insertSetting(key, value, clientid);
 	}
+}
+
+
+std::vector<ServerBackupDao::SBackupImageInfo> ServerBackupDao::getBackupInfo(std::vector<int> backupId)
+{
+	int backupIdSize = backupId.size();
+	IQuery* q_getBackupInfo = NULL;
+	std::string querycmd = "SELECT id, path, letter, incremental, complete, clientid, (strftime('%s', backuptime)) AS backuptimedata FROM backup_images WHERE ";
+	for(int i=0; i< backupIdSize-1; i++)
+	{
+		querycmd += "id=? OR ";
+	}
+
+	querycmd += "id=?"; // this is for the last backupId;
+
+	if(q_getBackupInfo == NULL)
+	{
+		q_getBackupInfo=db->Prepare(querycmd, false);
+	}
+
+	for(int i=0; i<backupIdSize; i++)
+	{
+	    q_getBackupInfo->Bind(backupId[i]);
+	}
+
+	db_results res=q_getBackupInfo->Read();
+	q_getBackupInfo->Reset();
+	db->destroyQuery(q_getBackupInfo);
+	std::vector<ServerBackupDao::SBackupImageInfo> ret;
+	ret.resize(res.size());
+	for(size_t i=0;i<res.size();++i)
+	{
+		ret[i].exists=true;
+		ret[i].id=watoi(res[i]["id"]);
+		ret[i].path=res[i]["path"];
+		ret[i].letter=res[i]["letter"];
+		ret[i].incremental=watoi(res[i]["incremental"]);
+		ret[i].backuptime=watoi(res[i]["backuptimedata"]);
+		ret[i].complete=watoi(res[i]["complete"]);
+		ret[i].clientId=watoi(res[i]["clientid"]);
+	}
+	return ret;
 }

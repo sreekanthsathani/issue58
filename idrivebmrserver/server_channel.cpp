@@ -1521,7 +1521,7 @@ void ServerChannelThread::DOWNLOAD_DYNAMIC_METADATA(str_map& params) {
 
 	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
-	const _u32 img_send_timeout = 30000;
+	const _u32 img_send_timeout = 50000;
 
 	ServerBackupDao backup_dao(db);
 
@@ -1572,16 +1572,59 @@ void ServerChannelThread::DOWNLOAD_DYNAMIC_METADATA(str_map& params) {
 				return;
 			}
 		}
-
+        //if cant find on that path go to latest
 		std::string filename_disk = os_file_prefix(res1[0]["path"] + "_dynamic_physical_disk_" + phydisk_number + ".txt");
 
+		Server->Log(filename_disk, LL_DEBUG);
 		std::ifstream ifs(filename_disk, std::ios::binary); //taking file as inputstream
-		std::string content;
-		content.assign((std::istreambuf_iterator<char>(ifs)),
-			(std::istreambuf_iterator<char>()));
 
-		tcpstack.Send(input, content);
-		ifs.close();
+		if (ifs.good()) {
+			Server->Log("original file found", LL_DEBUG);
+			std::string content;
+			content.assign((std::istreambuf_iterator<char>(ifs)),
+				(std::istreambuf_iterator<char>()));
+
+			tcpstack.Send(input, content);
+			ifs.close();
+		}
+		else {
+			IQuery *n = db->Prepare("SELECT path FROM backup_images WHERE clientid=? AND letter='C:' ORDER BY backuptime DESC LIMIT 1");
+			n->Bind(res[0]["clientid"]);
+			db_results res2 = n->Read();
+			if (res2.empty())
+			{
+				Server->Log("path for latest metadata not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+				_i64 r = -1;
+				if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+				{
+					reset();
+					return;
+				}
+			}
+			std::string filename_disk = os_file_prefix(res2[0]["path"] + "_dynamic_physical_disk_" + phydisk_number + ".txt");
+			Server->Log(filename_disk, LL_DEBUG);
+			std::ifstream ifss(filename_disk, std::ios::binary); //taking file as inputstream
+
+			if (ifss.good()) {
+				Server->Log("latest file found", LL_DEBUG);
+				std::string content;
+				content.assign((std::istreambuf_iterator<char>(ifss)),
+					(std::istreambuf_iterator<char>()));
+
+				tcpstack.Send(input, content);
+				ifss.close();
+			}
+			else {
+
+				std::string content1;
+				content1 = "not found"
+
+				tcpstack.Send(input, content1);
+				ifss.close();
+			}
+
+		}
+
 	}
 
 }
@@ -1590,7 +1633,7 @@ void ServerChannelThread::DOWNLOAD_DISK_LAYOUT(str_map& params) {
 
 	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 
-	const _u32 img_send_timeout = 30000;
+	const _u32 img_send_timeout = 50000;
 
 	ServerBackupDao backup_dao(db);
 
@@ -1639,16 +1682,60 @@ void ServerChannelThread::DOWNLOAD_DISK_LAYOUT(str_map& params) {
 				return;
 			}
 		}
-
+      
 		std::string filename_path = os_file_prefix(res1[0]["path"] + "_disk_layout.txt");
-
+		Server->Log(filename_path, LL_DEBUG);
 		std::ifstream ifs(filename_path, std::ios::binary); //taking file as inputstream
-		std::string content;
-		content.assign((std::istreambuf_iterator<char>(ifs)),
-			(std::istreambuf_iterator<char>()));
 
-		tcpstack.Send(input, content);
-		ifs.close();
+		if (ifs.good()) {
+			Server->Log("original file found", LL_DEBUG);
+			std::string content;
+			content.assign((std::istreambuf_iterator<char>(ifs)),
+				(std::istreambuf_iterator<char>()));
+
+			tcpstack.Send(input, content);
+			ifs.close();
+		}
+		else {
+			IQuery *n = db->Prepare("SELECT path FROM backup_images WHERE clientid=? AND letter='C:' ORDER BY backuptime DESC LIMIT 1");
+			n->Bind(res[0]["clientid"]);
+			db_results res2 = n->Read();
+			if (res2.empty())
+			{
+				Server->Log("path for latest metadata not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+				_i64 r = -1;
+				if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+				{
+					reset();
+					return;
+				}
+			}
+			//edit here if file not found
+			std::string filename_path = os_file_prefix(res2[0]["path"] + "_disk_layout.txt");
+			Server->Log(filename_path, LL_DEBUG);
+			std::ifstream ifss(filename_path, std::ios::binary); //taking file as inputstream
+
+			if (ifss.good()) {
+				Server->Log("latest file found", LL_DEBUG);
+				std::string content1;
+				content1.assign((std::istreambuf_iterator<char>(ifss)),
+					(std::istreambuf_iterator<char>()));
+
+				tcpstack.Send(input, content1);
+				ifss.close();
+			}
+			else {
+
+				std::string content1;
+			    content1 = "not found" 
+
+				tcpstack.Send(input, content1);
+				ifss.close();
+			}
+		
+		}
+
+
 	}
 }
 

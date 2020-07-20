@@ -381,8 +381,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			}
 			else
 			{
-				ServerLogger::Log(logid, "Cannot retrieve master boot record (MBR) for the disk from the client. "
-					"Continuing backup for dynamic disk and sending mbr with dynamic metadata.", LL_WARNING);
+				ServerLogger::Log(logid, "Sending MBR with dynamic metadata.", LL_INFO);
 			}
 		}
 	}
@@ -413,8 +412,10 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			//metapath = constructmetadataPath(sletter, image_file_format, pParentvhd);
 
 			if (metadatad.empty()) {
-				ServerLogger::Log(logid, "Cannot retrieve disk_layout for the disk from the client. "
-					"Continuing backup but you will not be able to restore dynamic disk image backup via restore CD.", LL_WARNING);
+				ServerLogger::Log(logid, "Failed to download disk_layout.Make sure disk_layout_advance file is generated.", LL_WARNING);
+			}
+			else if (metadatad.length()<25) {
+				ServerLogger::Log(logid, "Failed to download disk_layout.Please install latest BMR client for restoring dynamic volumes.", LL_WARNING);
 			}
 			else {
 				ServerLogger::Log(logid, "downloading disk layout done", LL_INFO);
@@ -440,8 +441,10 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			std::string dynstruct = getdynstruct(sletter, pLetter, pParentvhd.empty(), snapshot_id, fatal_disk_error, imagefn);
 
 			if (dynstruct.empty()) {
-				ServerLogger::Log(logid, "Cannot retrieve dynamic metadata for the disk from the client. "
-					"Continuing backup but you will not be able to restore dynamic disk image backup via restore CD.", LL_WARNING);
+				ServerLogger::Log(logid, "Failed to download dynamic metadata.Make sure disk_layout_advance file is generated.", LL_WARNING);
+			}
+			else if (dynstruct.length()<25) {
+				ServerLogger::Log(logid, "Failed to download dynamic metadata.Please install latest BMR client for restoring dynamic volumes.", LL_WARNING);
 			}
 			else {
 				ServerLogger::Log(logid, "downloading dynamic struct done", LL_INFO);
@@ -2450,9 +2453,6 @@ std::string ImageBackup::getMBR(const std::string &dl, const std::string& disk_p
 		}
 		if (dontbreak) {
 			ServerLogger::Log(logid, "Could not read MBR" + errmsg, LL_ERROR);
-		}
-		else {
-			ServerLogger::Log(logid, "Could not read MBR" + errmsg, LL_WARNING);
 		}
 
 	}

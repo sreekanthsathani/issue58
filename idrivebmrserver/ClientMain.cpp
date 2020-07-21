@@ -65,6 +65,7 @@
 #include "../fileservplugin/IFileServ.h"
 #include "DataplanDb.h"
 #include "../idrivebmrcommon/json.h"
+#include "stdlib.h"
 
 extern IUrlFactory *url_fak;
 extern ICryptoFactory *crypto_fak;
@@ -1079,13 +1080,14 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 
 bool ClientMain::GetIntegrityStatus(std::map<std::string, std::string> drivespaths)
 {
-	std::string mount_point = "/tmp/test";
-	mkdir(mount_point.c_str(), 0777);
+	std::string mount_dir = "/tmp/test";
 	std::string filesysType = "lowntfs-3g";
 	std::string backedUpFile = "";
 	for(std::map<std::string, std::string>::iterator it = drivespaths.begin();
 			it != drivespaths.end(); ++it)
 	{
+		std::string mount_point = mount_dir + convert(rand());
+		mkdir(mount_point.c_str(), 0777);
 		backedUpFile = it->second;
 		if(it->first == "ESP")
 			filesysType = "vfat";
@@ -1113,8 +1115,8 @@ bool ClientMain::GetIntegrityStatus(std::map<std::string, std::string> drivespat
 			Server->Log("PASSED backup integrity check for " + backedUpFile, LL_INFO);
 		}
 		filesysType = "lowntfs-3g";
+		rmdir(mount_point.c_str());
 	}
-	rmdir(mount_point.c_str());
 	return true;
 }
 

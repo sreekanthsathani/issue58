@@ -60,7 +60,7 @@ protected:
 	SBackup getLastImage(const std::string &letter, bool incr);
 	std::string constructImagePath(const std::string &letter, std::string image_file_format, std::string pParentvhd, std::string* backupdir);
 	//	std::string constructmetadataPath(const std::string &letter, std::string image_file_format, std::string pParentvhd);
-	std::string getMBR(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error, std::string& loadfn);
+	std::string getMBR(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error,bool& dynesperror std::string& loadfn);
 	std::string getMetaData(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error, std::string& imagefn);
 	std::string getdynstruct(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error, std::string& imagefn);
 	bool runPostBackupScript(bool incr, const std::string& path, const std::string &pLetter, bool success);

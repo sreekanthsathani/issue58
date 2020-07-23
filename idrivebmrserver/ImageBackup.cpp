@@ -364,19 +364,25 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 	std::string imagefn;
 	std::string metapath;
 	bool fatal_mbr_error;
+	bool dyn_esp_error;
 	std::string loadfn;
 	bool disk_backup = false;
 	std::string backupdir;
 
 
-	std::string mbrd = getMBR(sletter, pLetter, pParentvhd.empty(), snapshot_id, fatal_mbr_error, loadfn);
+	std::string mbrd = getMBR(sletter, pLetter, pParentvhd.empty(), snapshot_id, fatal_mbr_error, dyn_esp_error, loadfn);
 	if (mbrd.empty())
 	{
 		if (pLetter != "SYSVOL" && pLetter != "ESP")
 		{
-			if (fatal_mbr_error)
+			if (fatal_mbr_error && !dyn_esp_error)
 			{
 				ServerLogger::Log(logid, "Cannot retrieve master boot record (MBR) for the disk from the client.", LL_ERROR);
+				return false;
+			}
+			else if (fatal_mbr_error && dyn_esp_error)
+			{
+				ServerLogger::Log(logid, "Dynamic GPT system disk are not supported for now.backup will fail.", LL_ERROR);
 				return false;
 			}
 			else
@@ -2378,9 +2384,10 @@ SBackup ImageBackup::getLastImage(const std::string &letter, bool incr)
 }
 
 std::string ImageBackup::getMBR(const std::string &dl, const std::string& disk_path,
-	bool image_full, int64 snapshot_id, bool& fatal_error, std::string& loadfn)
+	bool image_full, int64 snapshot_id, bool& fatal_error,bool& dynesperror, std::string& loadfn)
 {
 	fatal_error = true;
+	dynesperror = false;
 	std::string params = "driveletter=" + EscapeParamString(dl);
 
 	if (!clientsubname.empty())
@@ -2426,7 +2433,17 @@ std::string ImageBackup::getMBR(const std::string &dl, const std::string& disk_p
 				SMBRData mbrdata(r2);
 				if (!mbrdata.errmsg.empty())
 				{
-					ServerLogger::Log(logid, "During getting MBR: " + mbrdata.errmsg, LL_WARNING);
+					if (strlower(dl).find("c") != std::string::npos) {
+							if (mbrdata.errmsg.find("dynamic volume") != std::string::npos)
+							{
+								if (mbrdata.errmsg.find("gpt disk") != std::string::npos) {
+									dynesperror = true;
+									return "";
+								}
+				
+							}
+					}
+					//ServerLogger::Log(logid, "During getting MBR: " + mbrdata.errmsg, LL_WARNING);
 				}
 				return ret;
 			}
@@ -2456,6 +2473,7 @@ std::string ImageBackup::getMBR(const std::string &dl, const std::string& disk_p
 		}
 
 	}
+
 
 	return "";
 }

@@ -52,7 +52,10 @@ private:
 	void DOWNLOAD_FILES_TOKENS(str_map& params);
 	void RESTORE_PERCENT( str_map params );
 	void RESTORE_DONE( str_map params );
+	void DOWNLOAD_DYNAMIC_METADATA(str_map& params);
+	void DOWNLOAD_DISK_LAYOUT(str_map& params);
 
+	std::string get_clientname(IDatabase* db, int clientid);
 	void reset();
 
 	ClientMain *client_main;

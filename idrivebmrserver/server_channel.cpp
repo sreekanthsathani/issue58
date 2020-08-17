@@ -406,6 +406,22 @@ std::string ServerChannelThread::processMsg(const std::string &msg)
 			allow_shutdown = true;
 		}
 	}
+	else if (next(msg, 0, "DOWNLOAD DISK LAYOUT "))
+	{
+		std::string s_params = msg.substr(21);
+		str_map params;
+		ParseParamStrHttp(s_params, &params);
+
+		DOWNLOAD_DISK_LAYOUT(params);
+	}
+	else if (next(msg, 0, "DOWNLOAD DYNAMIC METADATA "))
+	{
+		std::string s_params = msg.substr(26);
+		str_map params;
+		ParseParamStrHttp(s_params, &params);
+
+		DOWNLOAD_DYNAMIC_METADATA(params);
+	}
 	else if(next(msg, 0, "DOWNLOAD FILES TOKENS "))
 	{
 		std::string s_params=msg.substr(22);
@@ -1487,4 +1503,239 @@ void ServerChannelThread::reset()
 	tcpstack.reset();
 }
 
+std::string ServerChannelThread::get_clientname(IDatabase* db, int clientid)
+{
+	IQuery* q_name = db->Prepare("SELECT name FROM clients WHERE id=?");
+	q_name->Bind(clientid);
+	db_results res_name = q_name->Read();
+	q_name->Reset();
+
+	if (!res_name.empty())
+		return res_name[0]["name"];
+
+	return std::string();
+}
+
+void ServerChannelThread::DOWNLOAD_DYNAMIC_METADATA(str_map& params) {
+
+
+	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
+
+	const _u32 img_send_timeout = 50000;
+
+	ServerBackupDao backup_dao(db);
+
+	int img_id = watoi(params["img_id"]) - img_id_offset;
+
+
+	std::string phydisk_number = params["disk"];
+
+	IQuery *q = db->Prepare("SELECT clientid FROM backup_images WHERE id=? AND strftime('%s', backuptime)=?");
+	q->Bind(img_id);
+	q->Bind(params["time"]);
+	db_results res = q->Read();
+	if (res.empty())
+	{
+		Server->Log("Image to reference not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+		_i64 r = -1;
+		if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+		{
+			reset();
+			return;
+		}
+	}
+	else
+	{
+		std::string clientname = get_clientname(db, watoi(res[0]["clientid"]));
+
+		if (clientname.empty())
+		{
+			Server->Log("No permission to download image of client with id " + res[0]["clientid"], LL_DEBUG);
+			_i64 r = -1;
+			if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+			{
+				reset();
+			}
+			return;
+		}
+		IQuery *r = db->Prepare("SELECT path FROM backup_images WHERE clientid=? AND strftime('%s', backuptime)=? AND letter='C:'");
+		r->Bind(res[0]["clientid"]);
+		r->Bind(params["time"]);
+		db_results res1 = r->Read();
+		if (res1.empty())
+		{
+			Server->Log("path for metadata not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+			_i64 r = -1;
+			if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+			{
+				reset();
+				return;
+			}
+		}
+        //if cant find on that path go to latest
+		std::string filename_disk = os_file_prefix(res1[0]["path"] + "_dynamic_physical_disk_" + phydisk_number + ".txt");
+
+		Server->Log(filename_disk, LL_DEBUG);
+		std::ifstream ifs(filename_disk, std::ios::binary); //taking file as inputstream
+
+		if (ifs.good()) {
+			Server->Log("original file found", LL_DEBUG);
+			std::string content;
+			content.assign((std::istreambuf_iterator<char>(ifs)),
+				(std::istreambuf_iterator<char>()));
+
+			tcpstack.Send(input, content);
+			ifs.close();
+		}
+		else {
+			IQuery *n = db->Prepare("SELECT path FROM backup_images WHERE clientid=? AND letter='C:' ORDER BY backuptime DESC LIMIT 1");
+			n->Bind(res[0]["clientid"]);
+			db_results res2 = n->Read();
+			if (res2.empty())
+			{
+				Server->Log("path for latest metadata not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+				_i64 r = -1;
+				if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+				{
+					reset();
+					return;
+				}
+			}
+			std::string filename_disk = os_file_prefix(res2[0]["path"] + "_dynamic_physical_disk_" + phydisk_number + ".txt");
+			Server->Log(filename_disk, LL_DEBUG);
+			std::ifstream ifss(filename_disk, std::ios::binary); //taking file as inputstream
+
+			if (ifss.good()) {
+				Server->Log("latest file found", LL_DEBUG);
+				std::string content;
+				content.assign((std::istreambuf_iterator<char>(ifss)),
+					(std::istreambuf_iterator<char>()));
+
+				tcpstack.Send(input, content);
+				ifss.close();
+			}
+			else {
+
+				std::string content1;
+				content1 = "not found";
+
+				tcpstack.Send(input, content1);
+				ifss.close();
+			}
+
+		}
+
+	}
+
+}
+
+void ServerChannelThread::DOWNLOAD_DISK_LAYOUT(str_map& params) {
+
+	IDatabase *db = Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
+
+	const _u32 img_send_timeout = 50000;
+
+	ServerBackupDao backup_dao(db);
+
+	int img_id = watoi(params["img_id"]) - img_id_offset;
+
+	IQuery *q = db->Prepare("SELECT clientid FROM backup_images WHERE id=? AND strftime('%s', backuptime)=?");
+	q->Bind(img_id);
+	q->Bind(params["time"]);
+	db_results res = q->Read();
+	if (res.empty())
+	{
+		Server->Log("Image to reference not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+		_i64 r = -1;
+		if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+		{
+			reset();
+			return;
+		}
+	}
+	else
+	{
+		std::string clientname = get_clientname(db, watoi(res[0]["clientid"]));
+
+		if (clientname.empty())
+		{
+			Server->Log("No permission to download image of client with id " + res[0]["clientid"], LL_DEBUG);
+			_i64 r = -1;
+			if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+			{
+				reset();
+			}
+			return;
+		}
+
+		IQuery *r = db->Prepare("SELECT path FROM backup_images WHERE clientid=? AND strftime('%s', backuptime)=? AND letter='C:'");
+		r->Bind(res[0]["clientid"]);
+		r->Bind(params["time"]);
+		db_results res1 = r->Read();
+		if (res1.empty())
+		{
+			Server->Log("path for metadata not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+			_i64 r = -1;
+			if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+			{
+				reset();
+				return;
+			}
+		}
+      
+		std::string filename_path = os_file_prefix(res1[0]["path"] + "_disk_layout.txt");
+		Server->Log(filename_path, LL_DEBUG);
+		std::ifstream ifs(filename_path, std::ios::binary); //taking file as inputstream
+
+		if (ifs.good()) {
+			Server->Log("original file found", LL_DEBUG);
+			std::string content;
+			content.assign((std::istreambuf_iterator<char>(ifs)),
+				(std::istreambuf_iterator<char>()));
+
+			tcpstack.Send(input, content);
+			ifs.close();
+		}
+		else {
+			IQuery *n = db->Prepare("SELECT path FROM backup_images WHERE clientid=? AND letter='C:' ORDER BY backuptime DESC LIMIT 1");
+			n->Bind(res[0]["clientid"]);
+			db_results res2 = n->Read();
+			if (res2.empty())
+			{
+				Server->Log("path for latest metadata not found (img_id=" + convert(img_id) + " time=" + params["time"] + ")", LL_DEBUG);
+				_i64 r = -1;
+				if (!input->Write((char*)&r, sizeof(_i64), img_send_timeout))
+				{
+					reset();
+					return;
+				}
+			}
+			//edit here if file not found
+			std::string filename_path = os_file_prefix(res2[0]["path"] + "_disk_layout.txt");
+			Server->Log(filename_path, LL_DEBUG);
+			std::ifstream ifss(filename_path, std::ios::binary); //taking file as inputstream
+
+			if (ifss.good()) {
+				Server->Log("latest file found", LL_DEBUG);
+				std::string content1;
+				content1.assign((std::istreambuf_iterator<char>(ifss)),
+					(std::istreambuf_iterator<char>()));
+
+				tcpstack.Send(input, content1);
+				ifss.close();
+			}
+			else {
+
+				std::string content1;
+			    	content1 = "not found";
+
+				tcpstack.Send(input, content1);
+				ifss.close();
+			}
+		
+		}
+
+
+	}
+}
 

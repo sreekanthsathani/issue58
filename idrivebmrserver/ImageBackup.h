@@ -4,6 +4,7 @@
 #include "../idrivebmrcommon/sha2/sha2.h"
 #include "server_status.h"
 
+
 class IMutex;
 class ServerVHDWriter;
 class IFile;
@@ -57,8 +58,11 @@ protected:
 		int64 mbr_offset, int64 vhd_blocksize, bool &warned_about_parenthashfile_error, int64 empty_vhdblock_start,
 		ServerVHDWriter* vhdfile, int64 trim_add);
 	SBackup getLastImage(const std::string &letter, bool incr);
-	std::string constructImagePath(const std::string &letter, std::string image_file_format, std::string pParentvhd);
-	std::string getMBR(const std::string &dl, bool& fatal_error);
+	std::string constructImagePath(const std::string &letter, std::string image_file_format, std::string pParentvhd, std::string* backupdir);
+	//	std::string constructmetadataPath(const std::string &letter, std::string image_file_format, std::string pParentvhd);
+	std::string getMBR(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error,bool& dynesperror,std::string& loadfn);
+	std::string getMetaData(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error, std::string& imagefn);
+	std::string getdynstruct(const std::string &dl, const std::string& disk_path, bool image_full, int64 snapshot_id, bool& fatal_error, std::string& imagefn);
 	bool runPostBackupScript(bool incr, const std::string& path, const std::string &pLetter, bool success);
 	bool addBackupToDatabase(const std::string &pLetter, const std::string &pParentvhd,
 		int incremental, int incremental_ref, const std::string& imagefn, ScopedLockImageFromCleanup& cleanup_lock,

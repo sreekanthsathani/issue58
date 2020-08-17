@@ -1617,7 +1617,7 @@ void ServerChannelThread::DOWNLOAD_DYNAMIC_METADATA(str_map& params) {
 			else {
 
 				std::string content1;
-				content1 = "not found"
+				content1 = "not found";
 
 				tcpstack.Send(input, content1);
 				ifss.close();
@@ -1727,7 +1727,7 @@ void ServerChannelThread::DOWNLOAD_DISK_LAYOUT(str_map& params) {
 			else {
 
 				std::string content1;
-			    content1 = "not found" 
+			    	content1 = "not found";
 
 				tcpstack.Send(input, content1);
 				ifss.close();

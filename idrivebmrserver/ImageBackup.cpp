@@ -418,10 +418,10 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			//metapath = constructmetadataPath(sletter, image_file_format, pParentvhd);
 
 			if (metadatad.empty()) {
-				ServerLogger::Log(logid, "Failed to download disk_layout.Make sure disk_layout_advance file is generated.", LL_WARNING);
+				ServerLogger::Log(logid, "Failed to download the disk_layout. Check if the disk_layout_advance file is generated.", LL_WARNING);
 			}
 			else if (metadatad.length()<25) {
-				ServerLogger::Log(logid, "Failed to download disk_layout.Please install latest BMR client for restoring dynamic volumes.", LL_WARNING);
+				ServerLogger::Log(logid, "Failed to download the disk_layout. Install the latest BMR client for restoring dynamic volumes.", LL_WARNING);
 			}
 			else {
 				ServerLogger::Log(logid, "downloading disk layout done", LL_INFO);

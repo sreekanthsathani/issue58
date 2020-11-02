@@ -1,0 +1,128 @@
+# depslib dependency file v1.0
+1539583225 source:/home/chandru/Desktop/Zfs_snapshot_helper/main.cpp
+	<string>
+	<string>
+	<iostream>
+	<vector>
+	"stringtools.h"
+	<stdlib.h>
+	<unistd.h>
+	<stdarg.h>
+	<sys/types.h>
+	<sys/wait.h>
+	<sys/stat.h>
+	<fcntl.h>
+	<pwd.h>
+	<Windows.h>
+
+1538994815 /home/chandru/Desktop/Zfs_snapshot_helper/stringtools.h
+	<string>
+	<vector>
+	<map>
+	<algorithm>
+	"Types.h"
+
+1538994695 /home/chandru/Desktop/Zfs_snapshot_helper/Types.h
+	<string>
+	<map>
+	<vector>
+
+1538994741 /home/chandru/Desktop/Zfs_snapshot_helper/os_functions.h
+	<vector>
+	<string>
+	"Types.h"
+
+1538995808 source:/home/chandru/Desktop/Zfs_snapshot_helper/stringtools.cpp
+	<string>
+	<vector>
+	<fstream>
+	<sstream>
+	<map>
+	<stdlib.h>
+	<memory.h>
+	<stdlib.h>
+	<Windows.h>
+	"Types.h"
+	"stringtools.h"
+
+1542017818 source:/home/chandru/Desktop/ZFS_Latest/Zfs_snapshot_helper/main.cpp
+	<string>
+	<string>
+	<iostream>
+	<vector>
+	"stringtools.h"
+	<stdlib.h>
+	<unistd.h>
+	<stdarg.h>
+	<sys/types.h>
+	<sys/wait.h>
+	<sys/stat.h>
+	<fcntl.h>
+	<pwd.h>
+	<Windows.h>
+
+1540892886 /home/chandru/Desktop/ZFS_Latest/Zfs_snapshot_helper/stringtools.h
+	<string>
+	<vector>
+	<map>
+	<algorithm>
+	"Types.h"
+
+1540892886 /home/chandru/Desktop/ZFS_Latest/Zfs_snapshot_helper/Types.h
+	<string>
+	<map>
+	<vector>
+
+1540892886 source:/home/chandru/Desktop/ZFS_Latest/Zfs_snapshot_helper/stringtools.cpp
+	<string>
+	<vector>
+	<fstream>
+	<sstream>
+	<map>
+	<stdlib.h>
+	<memory.h>
+	<stdlib.h>
+	<Windows.h>
+	"Types.h"
+	"stringtools.h"
+
+1540892886 source:/home/chandru/Desktop/ZFS_Latest/zfs_helper/stringtools.cpp
+	<string>
+	<vector>
+	<fstream>
+	<sstream>
+	<map>
+	<stdlib.h>
+	<memory.h>
+	<stdlib.h>
+	<Windows.h>
+	"Types.h"
+	"stringtools.h"
+
+1540892886 /home/chandru/Desktop/ZFS_Latest/zfs_helper/Types.h
+	<string>
+	<map>
+	<vector>
+
+1540892886 /home/chandru/Desktop/ZFS_Latest/zfs_helper/stringtools.h
+	<string>
+	<vector>
+	<map>
+	<algorithm>
+	"Types.h"
+
+1591095924 source:/home/chandru/Desktop/ZFS_Latest/zfs_helper/main.cpp
+	<string>
+	<string>
+	<iostream>
+	<vector>
+	"stringtools.h"
+	<stdlib.h>
+	<unistd.h>
+	<stdarg.h>
+	<sys/types.h>
+	<sys/wait.h>
+	<sys/stat.h>
+	<fcntl.h>
+	<pwd.h>
+

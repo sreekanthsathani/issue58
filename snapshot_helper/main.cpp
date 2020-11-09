@@ -518,6 +518,23 @@ bool identify_dependencies(const std::string& snapshot, std::vector<std::string>
 	return true;
 }
 
+bool IsSnapshotLocked(const std::string snapshot)
+{
+	std::cout << "Searching for user references for " << snapshot << std::endl;
+	std::string holdValue;
+	int rc = exec_wait(find_zfs_cmd(), holdValue, "get", "-H", "-o", "value", "userrefs" ,snapshot.c_str(), NULL);
+	if(rc!=0)
+		return false;
+
+	if(atoi((trim(holdValue).c_str())) > 0)
+	{
+		std::cout << "Skipping deletion as " << snapshot << " is on hold" << std::endl;
+		return true;
+	}
+
+	return false;
+}
+
 bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, bool checkDependencies=true)
 {
 #ifdef _WIN32
@@ -550,25 +567,33 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, 
 	}
 	else if(mode==mode_zfs)
 	{
-		//if more than one dependencies for a snapshot.. skip that deletion
 		std::vector<std::string> dependencies;
 		if(checkDependencies)
                 {
-			if(identify_dependencies((subvolume_folder+"@ro"),dependencies))
+			if(is_subvolume(mode, subvolume_folder+"@ro"))
 			{
-				//if there are more than one or zero dependency then do not remove the snapshot
-				//as there might be virtual machine and incremental clone created at the same time
-				if(dependencies.size() > 1)
+				//if the snapshot is on hold skip deletion
+				if(IsSnapshotLocked(subvolume_folder+"@ro"))
 					return false;
-				else
-				//if there is 1 dependency, then check if the clone(dependency) is of virtualized system
-					if(dependencies.size() == 1)
-						if(dependencies[0].find("4096.virtual_machines-4096") != std::string::npos ||
-							dependencies[0].find("4096.-flrmount") != std::string::npos)
+
+				//if more than one dependencies for a snapshot.. skip that deletion
+				if(identify_dependencies((subvolume_folder+"@ro"),dependencies))
+				{
+					//if there are more than one or zero dependency then do not remove the snapshot
+					//as there might be virtual machine and incremental clone created at the same time
+					if(dependencies.size() > 1)
+						return false;
+					else
+						//if there is 1 dependency, then check if the clone(dependency) is of virtualized system
+						if(dependencies.size() == 1)
+							if(dependencies[0].find("4096.virtual_machines-4096") != std::string::npos ||
+									dependencies[0].find("4096.-flrmount") != std::string::npos)
 								return false;
+				}
+				else
+					return false;
+
 			}
-			else
-				return false;
 		}
 		exec_wait(find_zfs_cmd(), false, "destroy", (subvolume_folder+"@ro").c_str(), NULL);
 		int rc = exec_wait(find_zfs_cmd(), false, "destroy", subvolume_folder.c_str(), NULL);

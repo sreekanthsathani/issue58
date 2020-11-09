@@ -555,6 +555,22 @@ bool delete_zfs_subvolume(int mode, std::string subvolume_folder, bool quiet=fal
 	return false;
 }
 
+bool IsSnapshotLocked(const std::string snapshot)
+{
+    std::cout << "Searching for user references for " << snapshot << std::endl;
+    std::string holdValue;
+    int rc = exec_wait(find_zfs_cmd(), holdValue, "get", "-H", "-o", "value", "userrefs",snapshot.c_str(), NULL);
+    if(rc!=0)
+        return false;
+
+    if(atoi((trim(holdValue).c_str())) > 0)
+    {
+        std::cout << "Skipping deletion as " << snapshot << " is on hold" << std::endl;
+        return true;
+    }
+
+    return false;
+}
 
 bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false)
 {
@@ -564,6 +580,9 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false)
         std::vector<std::string> dependencies;
         if(is_subvolume(mode,subvolume_folder+"@ro"))
         {
+            if(IsSnapshotLocked(subvolume_folder+"@ro"))
+                return false;
+
             if(identify_dependencies((subvolume_folder+"@ro"),dependencies))
             {
                if(dependencies.size() > 1)

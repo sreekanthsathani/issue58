@@ -128,9 +128,9 @@ private:
 
 	int max_removable_incr_images(ServerSettings& settings, int backupid);
 
-	bool cleanup_images_client(int clientid, int64 minspace, std::vector<int> &imageids, bool cleanup_only_one);
+	bool cleanup_images_client(int clientid, int64 minspace, std::vector<int> &imageids, bool cleanup_only_one, bool isZFSFilesystem=false);
 
-	void cleanup_images(int64 minspace=-1);
+	void cleanup_images(int64 minspace=-1, bool isZFSFilesystem=false);
 
 	void cleanup_files(int64 minspace=-1);
 
@@ -170,7 +170,7 @@ private:
 	
 	int64 getImageSize(int backupid);
 
-	int hasEnoughFreeSpace(int64 minspace, ServerSettings *settings);
+	int hasEnoughFreeSpace(int64 minspace, ServerSettings *settings, bool isZFSFilesystem=false);
 
 	bool truncate_files_recurisve(std::string path);
 

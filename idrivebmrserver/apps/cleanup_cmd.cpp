@@ -24,15 +24,20 @@
 #include "../server.h"
 #include "../serverinterface/helper.h"
 #include "../create_files_index.h"
+#include <limits.h>
 
 extern SStartupStatus startup_status;
+int64 get_zfs_total_space();
 
-
-int64 cleanup_amount(std::string cleanup_pc, IDatabase *db)
+int64 cleanup_amount(std::string cleanup_pc, IDatabase *db, bool isZFS = false)
 {
 	ServerSettings settings(db);
 
-	int64 total_space=os_total_space(settings.getSettings()->backupfolder);
+	int64 total_space=-1;
+	if(isZFS)
+		total_space=get_zfs_total_space();
+	else
+		total_space=os_total_space(settings.getSettings()->backupfolder);
 
 	if(total_space==-1)
 	{
@@ -279,3 +284,75 @@ int cleanup_database(void)
 
 	return 0;
 }
+
+std::string exec_cmd(const char* cmd) 
+{
+	std::array<char, 128> buffer;
+	std::string result;
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+	if (!pipe) {
+		//throw std::runtime_error("popen() failed!");
+		return "";
+	}
+	while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+		result += buffer.data();
+	}
+	return result;
+}
+
+int64 get_zfs_total_space()
+{
+	std::string ret = exec_cmd("zfs list -Hpo used,avail idrivebmr");
+	if(ret.empty())
+	{
+		Server->Log("Failed to get total space for zfs", LL_ERROR);
+		return -1;
+	}
+
+        const char s[2] = "\t";
+      	char *token;
+	char returnval[1024];
+
+	strncpy(returnval, ret.c_str(), ret.length()+1);
+	token = strtok(returnval, s);
+	std::string used(token);
+	std::string avail;
+	while( token != NULL ) {
+	      std::string available(token);
+	      avail = available;
+	      token = strtok(NULL, s);
+        }
+	int64 total_space = stoll(used) + stoll(avail);
+	
+	if(total_space>LLONG_MAX)
+	{
+		return LLONG_MAX;
+	}
+	return(total_space);
+}
+
+int64 get_zfs_free_space()
+{
+	std::string ret = exec_cmd("zfs list -Hpo avail idrivebmr");
+	if(ret.empty())
+	{
+		Server->Log("Failed to get free space for zfs", LL_ERROR);
+		return -1;
+	}
+
+	const char s[2] = "\t";
+	char *token;
+	char returnval[1024];
+
+	strncpy(returnval, ret.c_str(), ret.length()+1);
+	token = strtok(returnval, s);
+	std::string avail(token);
+	int64 free_space = stoll(avail);
+
+	if(free_space>LLONG_MAX)
+	{
+		return LLONG_MAX;
+	}
+	return(free_space);
+}
+

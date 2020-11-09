@@ -46,6 +46,9 @@
 #include "copy_storage.h"
 #include <assert.h>
 #include <set>
+#include <stdarg.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 IMutex *ServerCleanupThread::mutex=NULL;
 ICondition *ServerCleanupThread::cond=NULL;
@@ -199,6 +202,7 @@ void ServerCleanupThread::operator()(void)
 			"SELECT value FROM settings_db.settings WHERE key=? AND clientid=0");
 		if( settings->getValue("autoshutdown", "false")=="true" )
 		{
+			Server->Log("autoshutdown is true", LL_DEBUG);
 			IScopedLock lock(a_mutex);
 
 			cleanupdao.reset(new ServerCleanupDao(db));
@@ -300,6 +304,7 @@ void ServerCleanupThread::operator()(void)
 				update_stats = false;
 			}
 		}
+		Server->Log("Checking whether to run cleanup", LL_DEBUG);
 		db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 		db_results res=db->Read("SELECT strftime('%H','now', 'localtime') AS time");
 		if(res.empty())
@@ -313,6 +318,7 @@ void ServerCleanupThread::operator()(void)
 				&& Server->getTimeSeconds()-last_cleanup>min_cleanup_interval
 				&& os_directory_exists(settings.getSettings()->backupfolder) )
 			{
+				Server->Log("Starting nightly clean up at hour: " + convert(chour), LL_DEBUG);
 				IScopedLock lock(a_mutex);
 
 				ISettingsReader *settings=Server->createDBSettingsReader(db, "settings_db.settings",
@@ -352,7 +358,7 @@ void ServerCleanupThread::operator()(void)
 					deletePendingClients();
 					do_cleanup();
 
-					enforce_quotas();
+					enforce_quotas();//this enforces client quota
 				}
 
 				cleanupdao.reset();
@@ -428,19 +434,21 @@ void ServerCleanupThread::do_cleanup(void)
 	}
 
 	removeerr.clear();
-	cleanup_images();
+	cleanup_images(-1, true);
 	cleanup_files();
 
 	{
 		ServerSettings server_settings(db);
-		int64 total_space=os_total_space(server_settings.getSettings()->backupfolder);
+		//int64 total_space=os_total_space(server_settings.getSettings()->backupfolder);
+		int64 total_space=get_zfs_total_space();
+		Server->Log("Totalspace " +convert(total_space), LL_DEBUG);
 		if(total_space!=-1)
 		{
-			int64 amount=cleanup_amount(server_settings.getSettings()->global_soft_fs_quota, db);
+			int64 amount=cleanup_amount(server_settings.getSettings()->global_soft_fs_quota, db, true);
 			if(amount<total_space)
 			{
 				ServerLogger::Log(logid, "Space to free: "+PrettyPrintBytes(total_space-amount), LL_INFO);
-				cleanup_images(total_space-amount);
+				cleanup_images(total_space-amount, true);
 				cleanup_files(total_space-amount);
 			}
 		}
@@ -768,12 +776,16 @@ void ServerCleanupThread::do_remove_unknown(void)
 	FileIndex::flush();
 }
 
-int ServerCleanupThread::hasEnoughFreeSpace(int64 minspace, ServerSettings *settings)
+int ServerCleanupThread::hasEnoughFreeSpace(int64 minspace, ServerSettings *settings, bool isZFSFilesystem)
 {
 	if(minspace!=-1)
 	{
 		std::string path=settings->getSettings()->backupfolder;
-		int64 available_space=os_free_space(os_file_prefix(path));
+		int64 available_space = -1;
+		if(isZFSFilesystem)
+			available_space=get_zfs_free_space();
+		else
+			available_space=os_free_space(os_file_prefix(path));
 		if(available_space==-1)
 		{
 			ServerLogger::Log(logid, "Error getting free space for path \""+path+"\"", LL_ERROR);
@@ -871,8 +883,8 @@ int ServerCleanupThread::max_removable_incr_images(ServerSettings& settings, int
 
 	return max_allowed_del_refs;
 }
-
-bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, std::vector<int> &imageids, bool cleanup_only_one)
+//checks max and min settings of client and deletes accordingly
+bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, std::vector<int> &imageids, bool cleanup_only_one, bool isZFSFilesystem)
 {
 	ServerSettings settings(db, clientid);
 
@@ -934,7 +946,7 @@ bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, st
 			}
 		}
 
-		int r=hasEnoughFreeSpace(minspace, &settings);
+		int r=hasEnoughFreeSpace(minspace, &settings, isZFSFilesystem);
 		if( r==-1 || r==1 )
 			return true;
 				
@@ -996,7 +1008,7 @@ bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, st
 			}
 		}
 
-		int r=hasEnoughFreeSpace(minspace, &settings);
+		int r=hasEnoughFreeSpace(minspace, &settings, isZFSFilesystem);
 		if( r==-1 || r==1 )
 			return true;
 				
@@ -1005,8 +1017,8 @@ bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, st
 
 	return false;
 }
-
-void ServerCleanupThread::cleanup_images(int64 minspace)
+//cleansup incomplete, pending and retentionsetting images
+void ServerCleanupThread::cleanup_images(int64 minspace, bool isZFSFilesystem)
 {
 	std::vector<ServerCleanupDao::SIncompleteImages> incomplete_images=cleanupdao->getIncompleteImages();
 	for(size_t i=0;i<incomplete_images.size();++i)
@@ -1051,7 +1063,7 @@ void ServerCleanupThread::cleanup_images(int64 minspace)
 
 		cleanup_all_system_images(settings);
 
-		int r=hasEnoughFreeSpace(minspace, &settings);
+		int r=hasEnoughFreeSpace(minspace, &settings, isZFSFilesystem);
 		if( r==-1 || r==1)
 			return;
 	}
@@ -1062,7 +1074,7 @@ void ServerCleanupThread::cleanup_images(int64 minspace)
 		int clientid=res[i];
 		
 		std::vector<int> imageids;
-		if(cleanup_images_client(clientid, minspace, imageids, false))
+		if(cleanup_images_client(clientid, minspace, imageids, false, isZFSFilesystem))
 		{
 			if(minspace!=-1)
 			{
@@ -2503,6 +2515,7 @@ void ServerCleanupThread::cleanup_client_hist()
 	rewrite_history("-2 years", "-1000 years", "%Y");
 }
 
+//cleansup sysvol and esp older than 12 hours which do not have parentImage(in assoc_images table) ID associated with it
 void ServerCleanupThread::cleanup_all_system_images(ServerSettings & settings)
 {
 	std::vector<ServerCleanupDao::SClientInfo> res_clients = cleanupdao->getClients();
@@ -2515,7 +2528,7 @@ void ServerCleanupThread::cleanup_all_system_images(ServerSettings & settings)
 		cleanup_system_images(clientid, clientname, settings);
 	}
 }
-
+//cleansup sysvol and esp older than 12 hours which do not have parentImage(in assoc_images table) ID associated with it
 void ServerCleanupThread::cleanup_system_images(int clientid, std::string clientname, ServerSettings& settings)
 {
 	std::vector<ServerCleanupDao::SImageBackupInfo>

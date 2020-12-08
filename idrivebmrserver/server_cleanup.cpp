@@ -124,7 +124,6 @@ void ServerCleanupThread::operator()(void)
 		case ECleanupAction_FreeMinspace:
 			{
 				ScopedProcess nightly_cleanup(std::string(), sa_emergency_cleanup, std::string(), logid, false, LOG_CATEGORY_CLEANUP);
-
 				deletePendingClients();
 				bool b = do_cleanup(cleanup_action.minspace, cleanup_action.cleanup_other);
 				if(cleanup_action.result!=NULL)
@@ -202,7 +201,7 @@ void ServerCleanupThread::operator()(void)
 			"SELECT value FROM settings_db.settings WHERE key=? AND clientid=0");
 		if( settings->getValue("autoshutdown", "false")=="true" )
 		{
-			Server->Log("autoshutdown is true", LL_DEBUG);
+			Server->Log("autoshutdown is true", LL_INFO);
 			IScopedLock lock(a_mutex);
 
 			cleanupdao.reset(new ServerCleanupDao(db));
@@ -304,7 +303,7 @@ void ServerCleanupThread::operator()(void)
 				update_stats = false;
 			}
 		}
-		Server->Log("Checking whether to run cleanup", LL_DEBUG);
+		Server->Log("Checking whether to run cleanup", LL_INFO);
 		db=Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER);
 		db_results res=db->Read("SELECT strftime('%H','now', 'localtime') AS time");
 		if(res.empty())
@@ -425,6 +424,7 @@ void ServerCleanupThread::enableUpdateStats()
 
 void ServerCleanupThread::do_cleanup(void)
 {
+	Server->Log("Do cleanup ", LL_INFO);
 	db_results cache_res;
 	if(db->getEngineName()=="sqlite")
 	{
@@ -441,7 +441,7 @@ void ServerCleanupThread::do_cleanup(void)
 		ServerSettings server_settings(db);
 		//int64 total_space=os_total_space(server_settings.getSettings()->backupfolder);
 		int64 total_space=get_zfs_total_space();
-		Server->Log("Totalspace " +convert(total_space), LL_DEBUG);
+		Server->Log("Totalspace " +convert(total_space), LL_INFO);
 		if(total_space!=-1)
 		{
 			int64 amount=cleanup_amount(server_settings.getSettings()->global_soft_fs_quota, db, true);
@@ -491,13 +491,16 @@ bool ServerCleanupThread::do_cleanup(int64 minspace, bool do_cleanup_other)
 	}
 
 	removeerr.clear();
-	cleanup_images(minspace);
-	cleanup_files(minspace);
+	Server->Log("starting image cleanup", LL_INFO);
+	cleanup_images(minspace,true);
+	Server->Log("starting file cleanup", LL_INFO);
+	cleanup_files(minspace,true);
 	cleanup_images();
 	cleanup_files();
 
 	if(do_cleanup_other)
 	{
+		Server->Log("starting other files cleanup", LL_INFO);
 		cleanup_other();
 	}
 
@@ -509,7 +512,7 @@ bool ServerCleanupThread::do_cleanup(int64 minspace, bool do_cleanup_other)
 	db->destroyAllQueries();
 
 	ServerSettings settings(db);
-	int r=hasEnoughFreeSpace(minspace, &settings);
+	int r=hasEnoughFreeSpace(minspace, &settings,true);
 
 	ServerStatus::incrementServerNospcStalled(-1);
 
@@ -780,6 +783,7 @@ int ServerCleanupThread::hasEnoughFreeSpace(int64 minspace, ServerSettings *sett
 {
 	if(minspace!=-1)
 	{
+
 		std::string path=settings->getSettings()->backupfolder;
 		int64 available_space = -1;
 		if(isZFSFilesystem)
@@ -793,6 +797,8 @@ int ServerCleanupThread::hasEnoughFreeSpace(int64 minspace, ServerSettings *sett
 		}
 		else
 		{
+
+			
 			if(available_space>minspace)
 			{
 				ServerLogger::Log(logid, "Enough free space now.", LL_DEBUG);
@@ -886,11 +892,13 @@ int ServerCleanupThread::max_removable_incr_images(ServerSettings& settings, int
 //checks max and min settings of client and deletes accordingly
 bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, std::vector<int> &imageids, bool cleanup_only_one, bool isZFSFilesystem)
 {
+	
 	ServerSettings settings(db, clientid);
 
 	int max_image_full=settings.getSettings()->max_image_full;
 	if(minspace!=-1)
 	{
+		Server->Log("minimum considered" , LL_INFO);
 		max_image_full=settings.getSettings()->min_image_full;
 	}
 
@@ -954,10 +962,15 @@ bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, st
 	}
 
 	notit.clear();
-
+	
 	int max_image_incr=settings.getSettings()->max_image_incr;
-	if(minspace!=-1)
-		max_image_incr=settings.getSettings()->min_image_incr;
+	if (minspace != -1)
+	{
+		Server->Log("minimum considered", LL_INFO);
+		max_image_incr = settings.getSettings()->min_image_incr;
+
+	}
+		
 
 	int incr_image_num=(int)getImagesIncrNum(clientid, backupid, notit);
 	ServerLogger::Log(logid, "Client with id="+convert(clientid)+" has "+convert(incr_image_num)+" incremental image backups max="+convert(max_image_incr), LL_DEBUG);
@@ -1020,6 +1033,8 @@ bool ServerCleanupThread::cleanup_images_client(int clientid, int64 minspace, st
 //cleansup incomplete, pending and retentionsetting images
 void ServerCleanupThread::cleanup_images(int64 minspace, bool isZFSFilesystem)
 {
+	
+	
 	std::vector<ServerCleanupDao::SIncompleteImages> incomplete_images=cleanupdao->getIncompleteImages();
 	for(size_t i=0;i<incomplete_images.size();++i)
 	{
@@ -1352,7 +1367,7 @@ bool ServerCleanupThread::cleanup_one_filebackup_client(int clientid, int64 mins
 	return false;
 }
 
-void ServerCleanupThread::cleanup_files(int64 minspace)
+void ServerCleanupThread::cleanup_files(int64 minspace, bool isZFSFilesystem)
 {
 	ServerSettings settings(db);
 
@@ -1365,7 +1380,7 @@ void ServerCleanupThread::cleanup_files(int64 minspace)
 		deleted_something=false;
 
 		{			
-			int r=hasEnoughFreeSpace(minspace, &settings);
+			int r=hasEnoughFreeSpace(minspace, &settings, isZFSFilesystem);
 			if( r==-1 || r==1 )
 					return;
 		}
@@ -1379,7 +1394,7 @@ void ServerCleanupThread::cleanup_files(int64 minspace)
 			if(cleanup_one_filebackup_client(clientid, minspace, filebid))
 			{
 				ServerSettings settings(db);
-				int r=hasEnoughFreeSpace(minspace, &settings);
+				int r=hasEnoughFreeSpace(minspace, &settings, isZFSFilesystem);
 				if( r==-1 || r==1 )
 						return;
 
@@ -2031,6 +2046,7 @@ bool ServerCleanupThread::truncate_files_recurisve(std::string path)
 	return true;
 }
 
+//from manual cleanup
 bool ServerCleanupThread::cleanupSpace(int64 minspace, bool do_cleanup_other)
 {
 	bool result;

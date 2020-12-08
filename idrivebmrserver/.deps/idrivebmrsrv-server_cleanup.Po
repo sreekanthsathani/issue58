@@ -262,7 +262,8 @@ idrivebmrserver/idrivebmrsrv-server_cleanup.o: \
  idrivebmrserver/../idrivebmrcommon/../Interface/Thread.h \
  idrivebmrserver/../idrivebmrcommon/../Interface/Mutex.h \
  idrivebmrserver/../idrivebmrcommon/../Interface/Condition.h \
- idrivebmrserver/copy_storage.h
+ idrivebmrserver/../idrivebmrcommon/json.h idrivebmrserver/copy_storage.h \
+ /usr/include/x86_64-linux-gnu/sys/wait.h
 
 /usr/include/stdc-predef.h:
 
@@ -960,4 +961,8 @@ idrivebmrserver/../idrivebmrcommon/../Interface/Mutex.h:
 
 idrivebmrserver/../idrivebmrcommon/../Interface/Condition.h:
 
+idrivebmrserver/../idrivebmrcommon/json.h:
+
 idrivebmrserver/copy_storage.h:
+
+/usr/include/x86_64-linux-gnu/sys/wait.h:

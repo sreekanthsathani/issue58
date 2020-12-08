@@ -303,14 +303,16 @@ idrivebmrserver/idrivebmrsrv-ClientMain.o: idrivebmrserver/ClientMain.cpp \
  /usr/include/x86_64-linux-gnu/bits/nan.h \
  /usr/include/x86_64-linux-gnu/bits/mathdef.h \
  /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
- /usr/include/x86_64-linux-gnu/bits/mathinline.h /usr/include/c++/6/stack \
+ /usr/include/x86_64-linux-gnu/bits/mathinline.h \
+ /usr/include/x86_64-linux-gnu/sys/stat.h /usr/include/c++/6/stack \
  /usr/include/c++/6/bits/stl_stack.h idrivebmrserver/FullFileBackup.h \
  idrivebmrserver/IncrFileBackup.h idrivebmrserver/ImageBackup.h \
  idrivebmrserver/ContinuousBackup.h idrivebmrserver/ThrottleUpdater.h \
  idrivebmrserver/../fileservplugin/IFileServ.h \
  idrivebmrserver/../fileservplugin/../Interface/Object.h \
  idrivebmrserver/../fileservplugin/../Interface/File.h \
- idrivebmrserver/DataplanDb.h idrivebmrserver/../common/lrucache.h
+ idrivebmrserver/DataplanDb.h idrivebmrserver/../common/lrucache.h \
+ idrivebmrserver/../idrivebmrcommon/json.h /usr/include/c++/6/stdlib.h
 
 /usr/include/stdc-predef.h:
 
@@ -1102,6 +1104,8 @@ idrivebmrserver/FileMetadataDownloadThread.h:
 
 /usr/include/x86_64-linux-gnu/bits/mathinline.h:
 
+/usr/include/x86_64-linux-gnu/sys/stat.h:
+
 /usr/include/c++/6/stack:
 
 /usr/include/c++/6/bits/stl_stack.h:
@@ -1125,3 +1129,7 @@ idrivebmrserver/../fileservplugin/../Interface/File.h:
 idrivebmrserver/DataplanDb.h:
 
 idrivebmrserver/../common/lrucache.h:
+
+idrivebmrserver/../idrivebmrcommon/json.h:
+
+/usr/include/c++/6/stdlib.h:

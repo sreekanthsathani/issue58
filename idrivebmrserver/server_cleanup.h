@@ -132,7 +132,7 @@ private:
 
 	void cleanup_images(int64 minspace=-1, bool isZFSFilesystem=false);
 
-	void cleanup_files(int64 minspace=-1);
+	void cleanup_files(int64 minspace=-1, bool isZFSFilesystem = false);
 
 	bool cleanup_one_filebackup_client(int clientid, int64 minspace, int& filebid);
 

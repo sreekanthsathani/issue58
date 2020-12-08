@@ -31,17 +31,24 @@ int64 get_zfs_total_space();
 
 int64 cleanup_amount(std::string cleanup_pc, IDatabase *db, bool isZFS = false)
 {
+	
 	ServerSettings settings(db);
-
+	
 	int64 total_space=-1;
-	if(isZFS)
-		total_space=get_zfs_total_space();
-	else
-		total_space=os_total_space(settings.getSettings()->backupfolder);
+	if (isZFS) {
+	
+		total_space = get_zfs_total_space();
+		Server->Log("zfs total space " + PrettyPrintBytes(total_space), LL_INFO);
+	}
+		
+	else {
+		total_space = os_total_space(settings.getSettings()->backupfolder);
+		Server->Log("OS total space " + PrettyPrintBytes(total_space), LL_INFO);
+	}
 
 	if(total_space==-1)
 	{
-		Server->Log("Error getting free space", LL_ERROR);
+		Server->Log("Error getting free space", LL_INFO);
 		return -1;
 	}
 
@@ -124,7 +131,7 @@ int cleanup_cmd(void)
 		cleanup_pc="10%";
 	}
 
-	int64 cleanup_bytes=cleanup_amount(cleanup_pc, db);
+	int64 cleanup_bytes=cleanup_amount(cleanup_pc, db, true);
 
 	if(cleanup_bytes<0)
 	{

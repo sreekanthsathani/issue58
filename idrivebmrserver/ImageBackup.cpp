@@ -382,7 +382,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			}
 			else if (fatal_mbr_error && dyn_esp_error)
 			{
-				ServerLogger::Log(logid, "Dynamic GPT system disk are not supported for now.backup will fail.", LL_ERROR);
+				ServerLogger::Log(logid, "Dynamic GPT system disks are currently not supported and will be skipped.", LL_ERROR);
 				return false;
 			}
 			else
@@ -453,7 +453,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 				ServerLogger::Log(logid, "Failed to download dynamic metadata.Please install latest BMR client for restoring dynamic volumes.", LL_WARNING);
 			}
 			else {
-				ServerLogger::Log(logid, "downloading dynamic struct done", LL_INFO);
+				ServerLogger::Log(logid, "downloading dynamic structure done", LL_INFO);
 				std::auto_ptr<IFsFile> disk_file(Server->openFile(os_file_prefix(imagefn + "_dynamic_disk_struct.txt"), MODE_WRITE));
 
 				if (disk_file.get() != NULL)

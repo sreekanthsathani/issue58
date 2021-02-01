@@ -1241,15 +1241,15 @@ std::string PrettyPrintSpeed(size_t bps)
 	size_t bit_ps=bps*8;
 
 	if( bit_ps<1000)
-		return convert(bit_ps)+" Bit/s";
+		return convert(bit_ps)+" bps";
 
 	if( bit_ps<1000*1000)
-		return convert(bit_ps/1000.f)+" KBit/s";
+		return convert(bit_ps/1000.f)+" Kbps";
 
 	if( bit_ps<1000*1000*1000)
-		return convert(bit_ps/(1000.f*1000.f))+" MBit/s";
+		return convert(bit_ps/(1000.f*1000.f))+" Mbps";
 
-	return convert(bit_ps/(1000.f*1000.f*1000.f))+" GBit/s";
+	return convert(bit_ps/(1000.f*1000.f*1000.f))+" Gbps";
 }
 
 std::string PrettyPrintTime(int64 ms)

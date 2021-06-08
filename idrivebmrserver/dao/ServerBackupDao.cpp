@@ -952,7 +952,7 @@ void ServerBackupDao::setImageBackupComplete(int backupid)
 {
 	if(q_setImageBackupComplete==NULL)
 	{
-		q_setImageBackupComplete=db->Prepare("UPDATE backup_images SET complete=1 WHERE id=?", false);
+		q_setImageBackupComplete=db->Prepare("UPDATE backup_images SET complete=3 WHERE id=?", false);
 	}
 	q_setImageBackupComplete->Bind(backupid);
 	q_setImageBackupComplete->Write();
@@ -1779,6 +1779,7 @@ void ServerBackupDao::prepareQueries( void )
 	q_setImageUnmounted=NULL;
 	q_getMountedImage=NULL;
 	q_getOldMountedImages=NULL;
+	q_getVirtualizationStatus=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1857,6 +1858,7 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_setImageUnmounted);
 	db->destroyQuery(q_getMountedImage);
 	db->destroyQuery(q_getOldMountedImages);
+	db->destroyQuery(q_getVirtualizationStatus);
 }
 
 
@@ -1912,4 +1914,29 @@ std::vector<ServerBackupDao::SBackupImageInfo> ServerBackupDao::getBackupInfo(st
 		ret[i].clientId=watoi(res[i]["clientid"]);
 	}
 	return ret;
+}
+
+/**
+* @-SQLGenAccess
+* @func <string> ServerBackupDao::getVirtualizationStatus
+* @return string virtualization status
+* @sql
+*     SELECT virtualizationStatus FROM clients where id=clientid
+*/
+std::string ServerBackupDao::getVirtualizationStatus(int clientid)
+{
+       if(q_getVirtualizationStatus==NULL)
+       {
+               q_getVirtualizationStatus=db->Prepare("SELECT virtualizationStatus FROM clients where id=?", false);
+       }
+       q_getVirtualizationStatus->Bind(clientid);
+       db_results res=q_getVirtualizationStatus->Read();
+       q_getVirtualizationStatus->Reset();
+       CondString ret = { false, "" };
+       if(!res.empty())
+       {
+       //      ret.exists=true;
+               ret.value=(res[0]["virtualizationStatus"]);
+       }
+       return ret.value;
 }

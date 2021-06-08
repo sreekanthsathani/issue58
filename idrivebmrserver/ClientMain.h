@@ -291,6 +291,8 @@ private:
 	void finishFailedRestore(std::string restore_identity, logid_t log_id, int64 status_id, int64 restore_id);
 	bool JsonizeRetrievedData(std::vector<int> backupInfo);
 	bool GetIntegrityStatus(std::map<std::string, std::string> drivePath);
+	bool ValidateVirtualization(std::vector<int> backupIds);
+	void GetClientLogID(void);
 
 	std::string curr_image_format;
 
@@ -399,4 +401,5 @@ private:
 	volatile bool do_reauthenticate;
 
 	std::vector<int> allBackupsInDatabase;
+	std::vector<std::string> virtualizationLogid;
 };

@@ -173,6 +173,7 @@ public:
 	SMountedImage getMountedImage(int backupid);
 	std::vector<SMountedImage> getOldMountedImages(int64 times);
         std::vector<SBackupImageInfo> getBackupInfo(std::vector<int> backupId);
+	std::string getVirtualizationStatus(int clientid);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -258,6 +259,7 @@ private:
 	IQuery* q_setImageUnmounted;
 	IQuery* q_getMountedImage;
 	IQuery* q_getOldMountedImages;
+	IQuery* q_getVirtualizationStatus;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

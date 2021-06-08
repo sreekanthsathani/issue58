@@ -581,13 +581,21 @@ void ClientMain::operator ()(void)
 
 						send_logdata = true;
 						backup_queue.erase(backup_queue.begin() + i);
+						GetClientLogID();
 						if(backup_queue.empty() || count_image_backup_try )
 						{
 							int64 cpassed_time_s;
 							for(int i=0; i<allBackupsInDatabase.size(); i++)
 								Server->Log("BackupIds : " + convert(allBackupsInDatabase[i]), LL_INFO);
 							if (allBackupsInDatabase.size())
-								JsonizeRetrievedData(allBackupsInDatabase);
+							{
+								bool backupIntegSuccess = JsonizeRetrievedData(allBackupsInDatabase);
+								if(backupIntegSuccess)
+								{
+									ValidateVirtualization(allBackupsInDatabase);
+								}
+								virtualizationLogid.clear();
+							}
 							allBackupsInDatabase.clear();
 							//Server->Log("Clearing allBackupsInDatabase", LL_INFO);
 						}
@@ -771,6 +779,7 @@ void ClientMain::operator ()(void)
 
 				do_full_image_now=false;
 			}
+			//nteja: TODO: isUpdateIncrImage has issues during scheduled backup. to fix this check if(virtualization is pending)
 			else if(can_backup_images && !server_settings->getSettings()->no_images && (!internet_no_images || do_incr_image_now)
 				&& ((isUpdateIncrImage() && ServerSettings::isInTimeSpan(server_settings->getBackupWindowIncrImage()) 
 				&& exponentialBackoffImage() && pauseRetryBackup() && isDataplanOkay(false) && isOnline(channel_thread) ) || do_incr_image_now)
@@ -1016,6 +1025,94 @@ void ClientMain::operator ()(void)
 
 	delete this;
 }
+static void SetConstantParameters(JSON::Object &virtObject)
+{
+	std::string cpus = "4";
+	std::string memory = "4096";
+	std::string nwStatus = "Disconnected";
+	std::string nwType = "None";
+	std::string storController = "SATA";
+	std::string video = "QXL";
+
+	virtObject.set("vcpu", cpus);
+	virtObject.set("memory", memory);
+	JSON::Object networkParams;
+	networkParams.set("nw-source", nwStatus);
+	networkParams.set("nw-type", nwType);
+	virtObject.set("network_params",networkParams);
+	virtObject.set("stor_controller", storController);
+	virtObject.set("video", video);
+}
+
+bool ClientMain::ValidateVirtualization(std::vector<int> backupIds)
+{
+	int validateVirtualization = 3;
+	bool completeStatus = true;
+	std::vector<ServerBackupDao::SBackupImageInfo>
+		backupInfo = backup_dao->getBackupInfo(backupIds);
+	int clientid = -1;
+
+	if(!backupInfo.size()) return false; //may be wrong
+	bool runScript = true;
+
+	JSON::Array volumeArray;
+	for(int i=0; i<backupInfo.size(); i++)
+	{
+		if(backupInfo[i].complete != validateVirtualization) //is this check needed?
+		{
+			runScript=false;
+			return false;
+		}
+
+		volumeArray.add(backupInfo[i].path);
+		if(clientid == -1)
+			clientid = backupInfo[i].clientId;
+		else
+			clientid = (clientid == backupInfo[i].clientId) ? clientid : -1;
+	}
+
+	//Get the hostname
+	std::string backupPath(backupInfo[0].path);
+	std::string storageString("/storage/idrivebmr/");
+	std::size_t found = backupPath.find("/", storageString.length());
+	std::string host;
+	if (found!=std::string::npos)
+	{
+		int len = found - storageString.length();
+		host = backupPath.substr(storageString.length(), len);
+	}
+
+	JSON::Object virtObject;
+	SetConstantParameters(virtObject);
+	virtObject.set("volumes", volumeArray);
+	virtObject.set("clientid", clientid);
+	virtObject.set("hostname", host);
+
+	JSON::Array logids,ids;
+	for(auto v : virtualizationLogid)
+		logids.add(v);
+
+	for(auto backupId: backupIds)
+		ids.add(backupId);
+
+	virtualizationLogid.clear();
+	virtObject.set("logids", logids);
+	virtObject.set("backupIds", ids);
+	Server->Log("ValidateVirtualization JSON  " + virtObject.stringify(false), LL_INFO);
+	if(runScript)
+	{
+		//Run script by sending logid -> log_data, backupids -> backup_images(complete), clientid->VirtualizationStatus
+		for(int i=0; i<virtualizationLogid.size(); i++)
+			Server->Log("invalidatevirt " + virtualizationLogid[i]);
+		///usr/share/idrivebmr/run Virtualization --build-physical json
+		/*if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + recoveryId.stringify(true) + "\'", logid))
+		{
+			Server->Log("Error in postbackup.py script", LL_ERROR);
+		}*/
+		return true;
+	}
+	return false;
+}
 
 bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 {
@@ -1063,8 +1160,12 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 
 	recoveryId.set("recoveryID", timeStr);
 	recoveryId.set("status", completeStatus ? "Success" : "Failed");
+	bool integStatus = false;
 	if(completeStatus)
-		recoveryId.set("integrity", GetIntegrityStatus(drivesPaths) ? "Good" : "Bad");
+	{
+		integStatus = GetIntegrityStatus(drivesPaths);
+		recoveryId.set("integrity", integStatus ? "Good" : "Bad");
+	}
 	else
 		recoveryId.set("integrity", "Bad");
 	recoveryId.set("backups", backupDetail);
@@ -1075,7 +1176,7 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 	{
 		Server->Log("Error in postbackup.py script", LL_ERROR);
 	}
-
+	return(completeStatus && integStatus);
 }
 
 bool ClientMain::GetIntegrityStatus(std::map<std::string, std::string> drivespaths)
@@ -1983,7 +2084,18 @@ void ClientMain::sendClientLogdata(void)
 		}
 	}
 }
+void ClientMain::GetClientLogID(void)
+{
+	q_get_unsent_logdata->Bind(clientid);
+	db_results res=q_get_unsent_logdata->Read();
+	q_get_unsent_logdata->Reset();
 
+	for(size_t i=0;i<res.size();++i)
+	{
+		virtualizationLogid.push_back(res[i]["id"]);
+		Server->Log("Inside getclientlogid virtlogid " + virtualizationLogid[i]);
+	}
+}
 MailServer ClientMain::getMailServerSettings(void)
 {
 	ISettingsReader *settings=Server->createDBSettingsReader(Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER), "settings_db.settings", "SELECT value FROM settings_db.settings WHERE key=? AND clientid=0");

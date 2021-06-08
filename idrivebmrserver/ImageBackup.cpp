@@ -55,7 +55,12 @@ const int max_num_hash_errors = 10;
 
 extern std::string server_identity;
 extern IFSImageFactory *image_fak;
-
+enum virtualizationErrorCode{
+	VIRT_SUCCESS,
+	VIRT_PENDING,
+	VIRT_FAILED,
+	VIRT_INVALID
+};
 
 namespace
 {
@@ -129,6 +134,7 @@ std::vector<ImageBackup::SImageDependency> ImageBackup::getDependencies(bool res
 	}
 	return ret;
 }
+
 
 bool ImageBackup::doBackup()
 {
@@ -723,7 +729,13 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			}
 		}
 
-		std::string ts = identity + "INCR IMAGE letter=" + pLetter + "&hashsize=" + convert(hashfile->Size()) + "&token=" + server_token + chksum_str + prevbitmap_str;
+		std::string virtStatus = backup_dao->getVirtualizationStatus(clientid);
+		virtStatus = virtStatus.empty()? "4" : virtStatus;
+		Server->Log("virtStatus in ImageBackup " + virtStatus);
+		std::string nonCbtBackup = "0";
+		if(stoi(virtStatus) != VIRT_SUCCESS)
+			nonCbtBackup = "1";
+		std::string ts = identity + "INCR IMAGE letter=" + pLetter + "&hashsize=" + convert(hashfile->Size()) + "&token=" + server_token + chksum_str + prevbitmap_str + "&noncbt=" + nonCbtBackup;
 		size_t rc = tcpstack.Send(cc, ts);
 		if (rc == 0)
 		{

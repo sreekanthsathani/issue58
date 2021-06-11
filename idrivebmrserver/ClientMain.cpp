@@ -64,7 +64,6 @@
 #include "ThrottleUpdater.h"
 #include "../fileservplugin/IFileServ.h"
 #include "DataplanDb.h"
-#include "../idrivebmrcommon/json.h"
 #include "stdlib.h"
 
 extern IUrlFactory *url_fak;
@@ -589,11 +588,7 @@ void ClientMain::operator ()(void)
 								Server->Log("BackupIds : " + convert(allBackupsInDatabase[i]), LL_INFO);
 							if (allBackupsInDatabase.size())
 							{
-								bool backupIntegSuccess = JsonizeRetrievedData(allBackupsInDatabase);
-								if(backupIntegSuccess)
-								{
-									ValidateVirtualization(allBackupsInDatabase);
-								}
+								InvokePostBackupScripts(allBackupsInDatabase);
 								virtualizationLogid.clear();
 							}
 							allBackupsInDatabase.clear();
@@ -1044,7 +1039,7 @@ static void SetConstantParameters(JSON::Object &virtObject)
 	virtObject.set("video", video);
 }
 
-bool ClientMain::ValidateVirtualization(std::vector<int> backupIds)
+bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object &virtObject)
 {
 	int validateVirtualization = 3;
 	bool completeStatus = true;
@@ -1053,14 +1048,12 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds)
 	int clientid = -1;
 
 	if(!backupInfo.size()) return false; //may be wrong
-	bool runScript = true;
 
 	JSON::Array volumeArray;
 	for(int i=0; i<backupInfo.size(); i++)
 	{
 		if(backupInfo[i].complete != validateVirtualization) //is this check needed?
 		{
-			runScript=false;
 			return false;
 		}
 
@@ -1082,7 +1075,6 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds)
 		host = backupPath.substr(storageString.length(), len);
 	}
 
-	JSON::Object virtObject;
 	SetConstantParameters(virtObject);
 	virtObject.set("volumes", volumeArray);
 	virtObject.set("clientid", clientid);
@@ -1098,26 +1090,43 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds)
 	virtualizationLogid.clear();
 	virtObject.set("logids", logids);
 	virtObject.set("backupIds", ids);
-	Server->Log("ValidateVirtualization JSON  " + virtObject.stringify(false), LL_INFO);
-	if(runScript)
-	{
-		//Run script by sending logid -> log_data, backupids -> backup_images(complete), clientid->VirtualizationStatus
-		for(int i=0; i<virtualizationLogid.size(); i++)
-			Server->Log("invalidatevirt " + virtualizationLogid[i]);
-		///usr/share/idrivebmr/run Virtualization --build-physical json
-		/*if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + recoveryId.stringify(true) + "\'", logid))
-		{
-			Server->Log("Error in postbackup.py script", LL_ERROR);
-		}*/
-		return true;
-	}
-	return false;
+	for(int i=0; i<virtualizationLogid.size(); i++)
+		Server->Log("in Validatevirt " + virtualizationLogid[i]);
+	return true;
 }
 
-bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
+bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
+{
+	JSON::Object backupJsondata;
+	bool backupIntegSuccess = JsonizeRetrievedData(backupInfo, backupJsondata);
+	if(!backupIntegSuccess)
+	{
+		//run postbackup.py script
+		Server->Log("Postbackup data " + backupJsondata.stringify(false), LL_INFO);
+		if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + backupJsondata.stringify(true) + "\'", logid))
+		{
+			Server->Log("Error in postbackup.py script", LL_ERROR);
+		}
+		return false;
+	}
+	JSON::Object virtData;
+	ValidateVirtualization(backupInfo, virtData);
+	JSON::Object virtObject;
+	virtObject.set("vm_params", virtData);
+	virtObject.set("postbackup_data", backupJsondata);
+	Server->Log("Assembled data "+ virtObject.stringify(false));
+	std::string cmd = "/usr/share/idrivebmr/run ";
+	std::string params = "Virtualization --verify-physical '" + virtObject.stringify(true) + "'";
+	if (!ClientMain::run_script(cmd, params, logid))
+	{
+		Server->Log("Error in calling Virtualization script", LL_ERROR);
+	}
+	return true;
+}
+
+bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &recoveryId)
 {
 	std::vector<std::string> paths;
-	JSON::Object recoveryId;
 	JSON::Array backupDetail;
 
 	int64 backupTime = 0;
@@ -1170,12 +1179,7 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 		recoveryId.set("integrity", "Bad");
 	recoveryId.set("backups", backupDetail);
 	recoveryId.set("clientId", convert(clientid));
-	Server->Log("JsonString to postinstallscript " + recoveryId.stringify(false), LL_INFO);
 
-	if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + recoveryId.stringify(true) + "\'", logid))
-	{
-		Server->Log("Error in postbackup.py script", LL_ERROR);
-	}
 	return(completeStatus && integStatus);
 }
 

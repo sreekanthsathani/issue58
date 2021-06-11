@@ -16,6 +16,7 @@
 #include "../idrivebmrcommon/sha2/sha2.h"
 #include "../idrivebmrcommon/fileclient/tcpstack.h"
 #include "server_settings.h"
+#include "../idrivebmrcommon/json.h"
 
 #include <memory>
 #include "server_log.h"
@@ -289,9 +290,11 @@ private:
 	static void cleanupShare(SShareCleanup& tocleanup);
 
 	void finishFailedRestore(std::string restore_identity, logid_t log_id, int64 status_id, int64 restore_id);
-	bool JsonizeRetrievedData(std::vector<int> backupInfo);
+	//bool JsonizeRetrievedData(std::vector<int> backupInfo, std::string &jsonData);
+	bool JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &recoveryId);
+	bool InvokePostBackupScripts(std::vector<int> backupInfo);
 	bool GetIntegrityStatus(std::map<std::string, std::string> drivePath);
-	bool ValidateVirtualization(std::vector<int> backupIds);
+	bool ValidateVirtualization(std::vector<int> backupIds, JSON::Object &virtObject);
 	void GetClientLogID(void);
 
 	std::string curr_image_format;

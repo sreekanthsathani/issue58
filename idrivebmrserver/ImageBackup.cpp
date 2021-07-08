@@ -41,7 +41,7 @@
 #include "server_ping.h"
 #include "snapshot_helper.h"
 #include "server.h"
-
+#include <jsoncpp/json/json.h>
 const unsigned int status_update_intervall = 1000;
 const unsigned int eta_update_intervall = 60000;
 const unsigned int sector_size = 512;
@@ -55,12 +55,6 @@ const int max_num_hash_errors = 10;
 
 extern std::string server_identity;
 extern IFSImageFactory *image_fak;
-enum virtualizationErrorCode{
-	VIRT_SUCCESS,
-	VIRT_PENDING,
-	VIRT_FAILED,
-	VIRT_INVALID
-};
 
 namespace
 {
@@ -271,6 +265,7 @@ bool ImageBackup::doBackup()
 		if (incremental_to_last)
 		{
 			ServerLogger::Log(logid, "Basing image backup on last incremental or full image backup", LL_INFO);
+			Server->Log("logid after basing " + convert(logid.first) + " " + convert(logid.second) );
 		}
 		else
 		{
@@ -729,12 +724,18 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			}
 		}
 
-		std::string virtStatus = backup_dao->getVirtualizationStatus(clientid);
-		virtStatus = virtStatus.empty()? "4" : virtStatus;
-		Server->Log("virtStatus in ImageBackup " + virtStatus);
+		std::string virtJson = backup_dao->getVirtualizationStatus(clientid);
+		int virtStatus = VIRT_INVALID;
+		if(!virtJson.empty()){
+			Json::Reader reader;
+			Json::Value root;
+			reader.parse(virtJson, root);
+			virtStatus = root["VirtStatus"].asInt();
+		}
+		Server->Log("virtStatus in ImageBackup " + convert(virtStatus));
 		std::string nonCbtBackup = "0";
-		if(stoi(virtStatus) != VIRT_SUCCESS)
-			nonCbtBackup = "1";
+		nonCbtBackup = (virtStatus != VIRT_SUCCESS) ? "1" : "0";
+
 		std::string ts = identity + "INCR IMAGE letter=" + pLetter + "&hashsize=" + convert(hashfile->Size()) + "&token=" + server_token + chksum_str + prevbitmap_str + "&noncbt=" + nonCbtBackup;
 		size_t rc = tcpstack.Send(cc, ts);
 		if (rc == 0)

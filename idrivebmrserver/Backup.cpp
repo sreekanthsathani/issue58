@@ -135,7 +135,7 @@ void Backup::operator()()
 		}
 		else if(num_issues==0)
 		{
-			ServerLogger::Log(logid, "Backup succeeded", LL_INFO);
+			ServerLogger::Log(logid, "Backup succeeded. Initializing Virtual Boot Verification..", LL_INFO);
 		}
 		else
 		{

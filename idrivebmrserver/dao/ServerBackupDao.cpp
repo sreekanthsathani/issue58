@@ -1780,6 +1780,9 @@ void ServerBackupDao::prepareQueries( void )
 	q_getMountedImage=NULL;
 	q_getOldMountedImages=NULL;
 	q_getVirtualizationStatus=NULL;
+	q_setVirtualizationStatus=NULL;
+	q_appendLogData=NULL;
+	q_incrementErrors=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1859,6 +1862,9 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_getMountedImage);
 	db->destroyQuery(q_getOldMountedImages);
 	db->destroyQuery(q_getVirtualizationStatus);
+	db->destroyQuery(q_setVirtualizationStatus);
+	db->destroyQuery(q_appendLogData);
+	db->destroyQuery(q_incrementErrors);
 }
 
 
@@ -1939,4 +1945,39 @@ std::string ServerBackupDao::getVirtualizationStatus(int clientid)
                ret.value=(res[0]["virtualizationStatus"]);
        }
        return ret.value;
+}
+
+void ServerBackupDao::setVirtualizationStatus(int clientid, std::string virtJson)
+{
+       if(q_setVirtualizationStatus==NULL)
+       {
+               q_setVirtualizationStatus=db->Prepare("UPDATE clients SET virtualizationStatus=? where id=?", false);
+       }
+       q_setVirtualizationStatus->Bind(virtJson);
+       q_setVirtualizationStatus->Bind(clientid);
+       q_setVirtualizationStatus->Write();
+       q_setVirtualizationStatus->Reset();
+}
+
+void ServerBackupDao::appendLogData(int id, std::string logmsg)
+{
+       if(q_appendLogData==NULL)
+       {
+               q_appendLogData=db->Prepare("UPDATE log_data SET data=data || ? WHERE id=?", false);
+       }
+       q_appendLogData->Bind(logmsg);
+       q_appendLogData->Bind(id);
+       q_appendLogData->Write();
+       q_appendLogData->Reset();
+}
+
+void ServerBackupDao::incrementErrors(int id)
+{
+	if(q_incrementErrors==NULL)
+	{
+		q_incrementErrors=db->Prepare("UPDATE logs SET errors=errors+1 WHERE id=?", false);
+	}
+	q_incrementErrors->Bind(id);
+	q_incrementErrors->Write();
+	q_incrementErrors->Reset();
 }

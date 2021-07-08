@@ -173,6 +173,7 @@ public:
 	static void destroyTemporaryFile(IFile *tmp);
 
 	bool UpdateCloudVirtualization(int backupId);
+	bool PreviousVirtualizeVerificationComplete();
 	
 	
 	virtual void log_progress( const std::string& fn, int64 total, int64 downloaded, int64 speed_bps );

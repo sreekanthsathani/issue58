@@ -174,6 +174,9 @@ public:
 	std::vector<SMountedImage> getOldMountedImages(int64 times);
         std::vector<SBackupImageInfo> getBackupInfo(std::vector<int> backupId);
 	std::string getVirtualizationStatus(int clientid);
+	void setVirtualizationStatus(int clientid, std::string virtJson);
+	void appendLogData(int id, std::string logmsg);
+	void incrementErrors(int id);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -260,6 +263,9 @@ private:
 	IQuery* q_getMountedImage;
 	IQuery* q_getOldMountedImages;
 	IQuery* q_getVirtualizationStatus;
+	IQuery* q_setVirtualizationStatus;
+	IQuery* q_appendLogData;
+	IQuery* q_incrementErrors;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

@@ -65,6 +65,8 @@
 #include "../fileservplugin/IFileServ.h"
 #include "DataplanDb.h"
 #include "stdlib.h"
+#include <fstream>
+#include <jsoncpp/json/json.h>
 
 extern IUrlFactory *url_fak;
 extern ICryptoFactory *crypto_fak;
@@ -368,6 +370,7 @@ void ClientMain::operator ()(void)
 	bool received_client_settings=true;
 	ServerLogger::Log(logid, "Getting client settings...", LL_DEBUG);
 	bool settings_doesnt_exist=false;
+	ServerLogger::Log(logid, "clientname nteja: ", LL_ERROR);
 	if(server_settings->getSettings()->allow_overwrite && !getClientSettings(settings_doesnt_exist))
 	{
 		if(!settings_doesnt_exist)
@@ -717,6 +720,7 @@ void ClientMain::operator ()(void)
 				updateClientAccessKey();
 			}
 
+			Server->Log("do_incr_image_now " + convert(do_incr_image_now) + " for client " + convert(clientid));
 			if( !server_settings->getSettings()->no_file_backups && (!internet_no_full_file || do_full_backup_now) &&
 				( (isUpdateFull(filebackup_group_offset + c_group_default) && ServerSettings::isInTimeSpan(server_settings->getBackupWindowFullFile())
 				&& exponentialBackoffFile() && pauseRetryBackup() && isDataplanOkay(true) && isOnline(channel_thread) ) || do_full_backup_now )
@@ -755,6 +759,7 @@ void ClientMain::operator ()(void)
 				&& isBackupsRunningOkay(false) && !do_incr_image_now)
 			{
 
+				Server->Log("running full backup");
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
 				for(size_t i=0;i<vols.size();++i)
 				{
@@ -762,6 +767,7 @@ void ClientMain::operator ()(void)
 					if( ( (isUpdateFullImage(letter) && !isRunningImageBackup(letter) && isBackupsRunningOkay(false)) || do_full_image_now)
 						&& !isImageGroupQueued(letter, true) )
 					{
+						Server->Log("running full backup2");
 						SRunningBackup backup;
 						backup.backup = new ImageBackup(this, clientid, clientname, clientsubname,
 							do_full_image_now?LogAction_AlwaysLog:LogAction_LogIfNotDisabled,
@@ -777,16 +783,18 @@ void ClientMain::operator ()(void)
 			//nteja: TODO: isUpdateIncrImage has issues during scheduled backup. to fix this check if(virtualization is pending)
 			else if(can_backup_images && !server_settings->getSettings()->no_images && (!internet_no_images || do_incr_image_now)
 				&& ((isUpdateIncrImage() && ServerSettings::isInTimeSpan(server_settings->getBackupWindowIncrImage()) 
-				&& exponentialBackoffImage() && pauseRetryBackup() && isDataplanOkay(false) && isOnline(channel_thread) ) || do_incr_image_now)
+				&& exponentialBackoffImage() && pauseRetryBackup() && isDataplanOkay(false) && isOnline(channel_thread) && PreviousVirtualizeVerificationComplete()) || do_incr_image_now)
 				&& isBackupsRunningOkay(false) )
 			{
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
 				for(size_t i=0;i<vols.size();++i)
 				{
+					Server->Log("running incr backup");
 					std::string letter= normalizeVolumeUpper(vols[i]);
 					if( ((isUpdateIncrImage(letter) && !isRunningImageBackup(letter) && isBackupsRunningOkay(false) ) || do_incr_image_now)
 						&& !isImageGroupQueued(letter, false) )
 					{
+						Server->Log("running incr backup2");
 						SRunningBackup backup;
 						backup.backup = new ImageBackup(this, clientid, clientname, clientsubname, do_incr_image_now ?LogAction_AlwaysLog:LogAction_LogIfNotDisabled,
 							true, letter, curr_server_token, letter, true, 0, std::string(), 0, !do_incr_image_now);
@@ -1092,6 +1100,15 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object
 	virtObject.set("backupIds", ids);
 	for(int i=0; i<virtualizationLogid.size(); i++)
 		Server->Log("in Validatevirt " + virtualizationLogid[i]);
+
+	JSON::Object clientVirtData;
+	clientVirtData.set("logids", logids);
+	clientVirtData.set("backupIds", ids);
+	clientVirtData.set("VirtStartTime", Server->getTimeSeconds());
+	clientVirtData.set("VirtStatus", VIRT_PENDING);
+	Server->Log("Client Virtualization data " + clientVirtData.stringify(false), LL_INFO);
+	backup_dao->setVirtualizationStatus(clientid, clientVirtData.stringify(true));
+
 	return true;
 }
 
@@ -1361,9 +1378,11 @@ bool ClientMain::isUpdateIncrImage(void)
 	{
 		if( isUpdateIncrImage(vols[i]+":") )
 		{
+			Server->Log("isUpdateIncrImage true");
 			return true;
 		}
 	}
+	Server->Log("isUpdateIncrImage false");
 	return false;
 }
 
@@ -2335,11 +2354,12 @@ bool ClientMain::isBackupsRunningOkay(bool file, bool incr)
 				++running_file_backups;
 			}
 		}
-
+		Server->Log("isBackupsRunningOkay true");
 		return running_backups_allowed;
 	}
 	else
 	{
+		Server->Log("isBackupsRunningOkay false");
 		return false;
 	}
 }
@@ -2845,7 +2865,9 @@ unsigned int ClientMain::exponentialBackoffTimeFile()
 
 bool ClientMain::exponentialBackoffImage()
 {
-	return exponentialBackoff(count_image_backup_try, last_image_backup_try, c_sleeptime_failed_imagebackup, c_exponential_backoff_div);
+	bool res = exponentialBackoff(count_image_backup_try, last_image_backup_try, c_sleeptime_failed_imagebackup, c_exponential_backoff_div);
+	Server->Log("exponentialBackoff " + convert(res));
+	return res;
 }
 
 bool ClientMain::exponentialBackoffFile()
@@ -2860,7 +2882,9 @@ bool ClientMain::exponentialBackoffCdp()
 
 bool ClientMain::pauseRetryBackup()
 {
-	return Server->getTimeMS() - last_backup_try >= 5 * 60 * 1000;
+	bool res = Server->getTimeMS() - last_backup_try >= 5 * 60 * 1000;
+	Server->Log("pauseRetryBackup " + convert(res));
+	return res;
 }
 
 bool ClientMain::sendServerIdentity(bool retry_exit)
@@ -3199,10 +3223,12 @@ bool ClientMain::isRunningImageBackup(const std::string& letter)
 		if(!backup_queue[i].backup->isFileBackup()
 			&& backup_queue[i].letter== normalizeVolumeUpper(letter) )
 		{
+			Server->Log("isRunningImageBackup true");
 			return true;
 		}
 	}
 
+	Server->Log("isRunningImageBackup false");
 	return false;
 }
 
@@ -3242,6 +3268,7 @@ bool ClientMain::isImageGroupQueued(const std::string & letter, bool full)
 
 	std::string vol = normalizeVolumeUpper(letter);
 
+	Server->Log("image_snapshot_groups " + image_snapshot_groups);
 	for (size_t i = 0; i < groups.size(); ++i)
 	{
 		std::vector<std::string> vols;
@@ -3267,12 +3294,14 @@ bool ClientMain::isImageGroupQueued(const std::string & letter, bool full)
 					|| std::find(vols.begin(), vols.end(), normalizeVolumeUpper(backup_queue[k].letter))
 						!= vols.end())
 				{
+					Server->Log("isImageGroupQueued true");
 					return true;
 				}
 			}
 		}
 	}
 
+	Server->Log("isImageGroupQueued false");
 	return false;
 }
 
@@ -3610,4 +3639,57 @@ bool ClientMain::UpdateCloudVirtualization(int backupId)
 {
 	allBackupsInDatabase.push_back(backupId);
 	return true;
+}
+
+bool ClientMain::PreviousVirtualizeVerificationComplete()
+{
+	//check the virtStatus in virtualizationStatus column
+	//get the timestamp from it
+	//if timestamp is greater than 30 mins and virtStatus=1 reset that to 0, return true
+	//else do not start the backup, return false
+	//
+	unsigned int duration = 30*60; //30 mins
+	int64 time_now = Server->getTimeSeconds();
+	std::string virtStatus = backup_dao->getVirtualizationStatus(clientid);
+	Server->Log("virtStatus in PreviousVirtualizeVerificationComplete is " + virtStatus, LL_INFO);
+
+	Json::Reader reader;
+	Json::Value root;
+
+	reader.parse(virtStatus, root);
+	Server->Log("Virt start time " + root["VirtStartTime"].asString() );
+	uint64 virtStartTime = root["VirtStartTime"].asUInt64();
+	int virtstatus = root["VirtStatus"].asInt();
+        Json::Value bkpid = root["backupIds"];
+	Json::Value logids = root["logids"];
+
+	uint64 elapsedtime = time_now - virtStartTime;
+	Server->Log("elapsedtime " + convert(elapsedtime));
+	//if elapsedTime is greater than 30 min and previous virtualization is still pending then
+	//the previous backup is marked as failed and logs table is updated with proper message
+	if(elapsedtime >= duration && virtstatus == VIRT_PENDING)
+	{
+		Server->Log("Virtualization Timeout: Setting previous backup as failure", LL_WARNING);
+		for(int i = 0; i < bkpid.size(); i++){
+			backup_dao->setImageBackupIncomplete(bkpid[i].asInt());
+			Server->Log("bkpid " + bkpid[i].asString(), LL_INFO);
+		}
+		std::string logmsg;
+		for(int i = 0; i < logids.size(); i++){
+			Server->Log("logid " + logids[i].asString(), LL_INFO);
+			int id = stoi(logids[i].asString());
+			logmsg = "2-" + std::to_string(time_now) + "-Virtualization Timeout";
+			backup_dao->appendLogData(id, logmsg);
+			//increment errors column in logs table
+			backup_dao->incrementErrors(id);
+		}
+
+		//Setting virtualization status failed
+		root["VirtStatus"] = VIRT_FAILED;
+		Json::FastWriter fastWriter;
+		std::string output = fastWriter.write(root);
+		backup_dao->setVirtualizationStatus(clientid, output);
+		return true;
+	}
+	return false;
 }

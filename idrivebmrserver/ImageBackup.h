@@ -12,6 +12,13 @@ class ServerPingThread;
 class ScopedLockImageFromCleanup;
 class ServerRunningUpdater;
 
+enum virtualizationErrorCode{
+	VIRT_SUCCESS,
+	VIRT_PENDING,
+	VIRT_FAILED,
+	VIRT_INVALID
+};
+
 class ImageBackup : public Backup
 {
 public:

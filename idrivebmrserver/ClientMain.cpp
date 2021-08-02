@@ -1131,9 +1131,9 @@ bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
 	JSON::Object virtObject;
 	virtObject.set("vm_params", virtData);
 	virtObject.set("postbackup_data", backupJsondata);
-	Server->Log("Assembled data "+ virtObject.stringify(false));
-	std::string cmd = "/usr/share/idrivebmr/run ";
-	std::string params = "Virtualization --verify-physical '" + virtObject.stringify(true) + "'";
+	Server->Log("Assembled data "+ virtObject.stringify(true));
+	std::string cmd = "/usr/local/bin/python3";
+	std::string params = " /usr/share/idrivebmr/run Virtualization --verify-physical '" + virtObject.stringify(true) + "'";
 	if (!ClientMain::run_script(cmd, params, logid))
 	{
 		Server->Log("Error in calling Virtualization script", LL_ERROR);

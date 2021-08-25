@@ -265,7 +265,6 @@ bool ImageBackup::doBackup()
 		if (incremental_to_last)
 		{
 			ServerLogger::Log(logid, "Basing image backup on last incremental or full image backup", LL_INFO);
-			Server->Log("logid after basing " + convert(logid.first) + " " + convert(logid.second) );
 		}
 		else
 		{
@@ -732,7 +731,6 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			reader.parse(virtJson, root);
 			virtStatus = root["VirtStatus"].asInt();
 		}
-		Server->Log("virtStatus in ImageBackup " + convert(virtStatus));
 		std::string nonCbtBackup = "0";
 		nonCbtBackup = (virtStatus != VIRT_SUCCESS) ? "1" : "0";
 

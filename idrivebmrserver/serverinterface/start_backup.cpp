@@ -96,21 +96,35 @@ ACTION_IMPL(start_backup)
 				{
 					found_client=true;
 					
-					if(!client_status[i].r_online || client_status[i].comm_pipe==NULL)
-					{
+					db_results res=db->Read("SELECT virtualizationStatus FROM clients WHERE id="+convert(start_clientid)+"");
+					if(res[0]["virtualizationStatus"] == "1"){
+
 						obj.set("start_ok", false);
+						obj.set("err_msg", "2");
 					}
-					else
-					{
-						if(client_start_backup(client_status[i].comm_pipe, start_type) )
-						{
-							obj.set("start_ok", true);
-						}
+
+					else{
+
+						if(!client_status[i].r_online || client_status[i].comm_pipe==NULL)
+							{
+								obj.set("start_ok", false);
+								obj.set("err_msg", "1");
+							}
 						else
-						{
-							obj.set("start_ok", false);
-						}
+							{
+								if(client_start_backup(client_status[i].comm_pipe, start_type) )
+								{
+									obj.set("start_ok", true);
+									obj.set("err_msg", "0");
+								}
+								else
+								{
+									obj.set("start_ok", false);
+									obj.set("err_msg", "1");
+								}
+							}
 					}
+
 
 					break;
 				}
@@ -119,6 +133,7 @@ ACTION_IMPL(start_backup)
 			if(!found_client)
 			{
 				obj.set("start_ok", false);
+				obj.set("err_msg", "1");
 			}
 
 			result.add(obj);

@@ -20,6 +20,7 @@
 #include "../../Interface/Pipe.h"
 #include "../server_status.h"
 #include <algorithm>
+#include <jsoncpp/json/json.h>
 
 namespace
 {
@@ -97,7 +98,13 @@ ACTION_IMPL(start_backup)
 					found_client=true;
 					
 					db_results res=db->Read("SELECT virtualizationStatus FROM clients WHERE id="+convert(start_clientid)+"");
-					if(res[0]["virtualizationStatus"] == "1"){
+					std::string virtualizationInfo = res[0]["virtualizationStatus"];
+					Json::Reader reader;
+				    Json::Value root;
+					reader.parse(virtualizationInfo, root);
+					int virtstatus = root["VirtStatus"].asInt();
+
+					if(virtstatus == 1){
 
 						obj.set("start_ok", false);
 						obj.set("err_msg", "2");

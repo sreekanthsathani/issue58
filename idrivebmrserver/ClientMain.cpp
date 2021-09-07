@@ -1127,6 +1127,25 @@ void ClientMain::SetVirtualizationStatusOfClient(std::vector<int> backupIds)
 
 }
 
+void ClientMain::HandleLogsForAbortedBackup()
+{
+	std::vector<std::string> logids(virtualizationLogid);
+	std::string logmsg;
+	std::string msgBody = "Virtual Boot Verification skipped as the backup failed for few volumes in this session";
+	int64 time_now = Server->getTimeSeconds();
+	for(int i = 0; i < logids.size(); i++)
+	{
+		int id = stoi(logids[i]);
+		if (backup_dao->readLogData(id).find("Backup succeeded") != std::string::npos){
+			int id = stoi(logids[i]);
+			logmsg = "2-" + std::to_string(time_now) + "-" + msgBody;
+			backup_dao->appendLogData(id, logmsg);
+			//increment errors column in logs table
+			backup_dao->incrementErrors(id);
+		}
+	}
+}
+
 bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
 {
 	JSON::Object backupJsondata;
@@ -1141,6 +1160,7 @@ bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
 		{
 			Server->Log("Error in postbackup.py script", LL_ERROR);
 		}
+		HandleLogsForAbortedBackup();
 		return false;
 	}
 

@@ -298,6 +298,7 @@ private:
 	bool ValidateVirtualization(std::vector<int> backupIds, JSON::Object &virtObject);
 	void GetClientLogID(void);
 	void SetVirtualizationStatusOfClient(std::vector<int> backupIds);
+	void HandleLogsForAbortedBackup();
 
 	std::string curr_image_format;
 

@@ -1792,6 +1792,7 @@ void ServerBackupDao::prepareQueries( void )
 	q_appendLogData=NULL;
 	q_incrementErrors=NULL;
 	q_IsVirtualBootVerificationDisabled=NULL;
+	q_readLogData=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1875,6 +1876,7 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_appendLogData);
 	db->destroyQuery(q_incrementErrors);
 	db->destroyQuery(q_IsVirtualBootVerificationDisabled);
+	db->destroyQuery(q_readLogData);
 }
 
 
@@ -2007,4 +2009,20 @@ bool ServerBackupDao::IsVirtualBootVerificationDisabled(int clientid)
 		return(watoi(res[0]["vbv_disabled"]));
 	}
 	return false;
+}
+
+std::string ServerBackupDao::readLogData(int id)
+{
+	if(q_readLogData==NULL)
+	{
+		q_readLogData=db->Prepare("Select data from log_data where id=?", false);
+	}
+	q_readLogData->Bind(id);
+	db_results res=q_readLogData->Read();
+	q_readLogData->Reset();
+	if(!res.empty())
+	{
+		return(res[0]["data"]);
+	}
+	return "";
 }

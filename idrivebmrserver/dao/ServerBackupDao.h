@@ -178,6 +178,7 @@ public:
 	void appendLogData(int id, std::string logmsg);
 	void incrementErrors(int id);
 	bool IsVirtualBootVerificationDisabled(int clientid);
+	std::string readLogData(int logid);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -268,6 +269,7 @@ private:
 	IQuery* q_appendLogData;
 	IQuery* q_incrementErrors;
 	IQuery* q_IsVirtualBootVerificationDisabled;
+	IQuery* q_readLogData;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

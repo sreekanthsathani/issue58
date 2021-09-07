@@ -138,7 +138,7 @@ public:
 	void setImageSize(int64 size_bytes, int backupid);
 	void addImageSizeToClient(int clientid, int64 add_size);
 	void setImageBackupSynctime(int backupid);
-	void setImageBackupComplete(int backupid);
+	void setImageBackupComplete(int backupid, int status=3);
 	void setImageBackupIncomplete(int backupid);
 	void updateImageBackupRunning(int backupid);
 	void saveImageAssociation(int img_id, int assoc_id);
@@ -177,6 +177,7 @@ public:
 	void setVirtualizationStatus(int clientid, std::string virtJson);
 	void appendLogData(int id, std::string logmsg);
 	void incrementErrors(int id);
+	bool IsVirtualBootVerificationDisabled(int clientid);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -266,6 +267,7 @@ private:
 	IQuery* q_setVirtualizationStatus;
 	IQuery* q_appendLogData;
 	IQuery* q_incrementErrors;
+	IQuery* q_IsVirtualBootVerificationDisabled;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

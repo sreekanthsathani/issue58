@@ -135,7 +135,10 @@ void Backup::operator()()
 		}
 		else if(num_issues==0)
 		{
-			ServerLogger::Log(logid, "Backup succeeded. Initializing Virtual Boot Verification..", LL_INFO);
+			if(backup_dao->IsVirtualBootVerificationDisabled(clientid))
+				ServerLogger::Log(logid, "Backup succeeded. Virtual Boot Verification Disabled.", LL_INFO);
+			else
+				ServerLogger::Log(logid, "Backup succeeded. Initializing Virtual Boot Verification. Please wait for the final status of the backup", LL_INFO);
 		}
 		else
 		{

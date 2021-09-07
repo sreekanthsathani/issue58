@@ -557,7 +557,8 @@ void ClientMain::operator ()(void)
 										{
 											if (success)
 											{
-												backup_dao->setImageBackupComplete(it->first->getBackupId());
+												int complete = backup_dao->IsVirtualBootVerificationDisabled(clientid) ? 1 : 3;
+												backup_dao->setImageBackupComplete(it->first->getBackupId(), complete);
 												backup_dao->updateClientLastImageBackup(it->first->getBackupId(), clientid);
 											}
 											ServerCleanupThread::unlockImageFromCleanup(it->first->getBackupId());
@@ -1046,8 +1047,7 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object
 	bool completeStatus = true;
 	std::vector<ServerBackupDao::SBackupImageInfo>
 		backupInfo = backup_dao->getBackupInfo(backupIds);
-	int clientid = -1;
-
+	int clientId = -1;
 	if(!backupInfo.size()) return false; //may be wrong
 
 	JSON::Array volumeArray;
@@ -1059,10 +1059,10 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object
 		}
 
 		volumeArray.add(backupInfo[i].path);
-		if(clientid == -1)
-			clientid = backupInfo[i].clientId;
+		if(clientId == -1)
+			clientId = backupInfo[i].clientId;
 		else
-			clientid = (clientid == backupInfo[i].clientId) ? clientid : -1;
+			clientId = (clientId == backupInfo[i].clientId) ? clientId : -1;
 	}
 
 	//Get the hostname
@@ -1078,9 +1078,8 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object
 
 	SetConstantParameters(virtObject);
 	virtObject.set("volumes", volumeArray);
-	virtObject.set("clientid", clientid);
+	virtObject.set("clientid", clientId);
 	virtObject.set("hostname", host);
-
 	JSON::Array logids,ids;
 	for(auto v : virtualizationLogid)
 		logids.add(v);
@@ -1105,10 +1104,35 @@ bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object
 	return true;
 }
 
+
+void ClientMain::SetVirtualizationStatusOfClient(std::vector<int> backupIds)
+{
+	JSON::Array logids,ids;
+	for(auto v : virtualizationLogid)
+		logids.add(v);
+
+	for(auto backupId: backupIds)
+		ids.add(backupId);
+
+	virtualizationLogid.clear();
+
+	JSON::Object clientVirtData;
+	clientVirtData.set("logids", logids);
+	clientVirtData.set("backupIds", ids);
+	clientVirtData.set("VirtStartTime", Server->getTimeSeconds());
+	//if VBV is disabled then it is assumed that Vitualization is successful and the value is set to VIRT_SUCCESS
+	clientVirtData.set("VirtStatus", VIRT_SUCCESS);
+	Server->Log("SetVirtualizationStatusOfClient " + clientVirtData.stringify(false), LL_INFO);
+	backup_dao->setVirtualizationStatus(clientid, clientVirtData.stringify(true));
+
+}
+
 bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
 {
 	JSON::Object backupJsondata;
 	bool backupIntegSuccess = JsonizeRetrievedData(backupInfo, backupJsondata);
+	bool isVBVDisabled = backup_dao->IsVirtualBootVerificationDisabled(clientid);
+
 	if(!backupIntegSuccess)
 	{
 		//run postbackup.py script
@@ -1119,8 +1143,22 @@ bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
 		}
 		return false;
 	}
+
+	if(backupIntegSuccess && isVBVDisabled)
+	{
+		Server->Log("VBV disabled. Postbackup data " + backupJsondata.stringify(false), LL_INFO);
+		if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + backupJsondata.stringify(true) + "\'", logid))
+		{
+			Server->Log("Error in postbackup.py script", LL_ERROR);
+		}
+
+		//if vbv is disabled then simply set the virtStatus=SUCCESS in ValidateVirtualization() in clients table and exit
+		SetVirtualizationStatusOfClient(backupInfo);
+		return true;
+	}
 	JSON::Object virtData;
 	ValidateVirtualization(backupInfo, virtData);
+
 	JSON::Object virtObject;
 	virtObject.set("vm_params", virtData);
 	virtObject.set("postbackup_data", backupJsondata);
@@ -1146,7 +1184,7 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &
 		backupInfo = backup_dao->getBackupInfo(backupIds);
 
 	bool completeStatus = true;
-	int clientid = -1;
+	int clientId = -1;
 	std::map<std::string, std::string> drivesPaths;
 
 	//ToBe tested
@@ -1155,10 +1193,10 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &
 	for ( int i = 0; i < backupInfo.size(); i++)
 	{
 		std::string letter = backupInfo[i].letter;
-		if(clientid == -1)
-			clientid = backupInfo[i].clientId;
+		if(clientId == -1)
+			clientId = backupInfo[i].clientId;
 		else
-			clientid = (clientid == backupInfo[i].clientId) ? clientid : -1;
+			clientId = (clientId == backupInfo[i].clientId) ? clientId : -1;
 
 		if(!backupTime && (letter != "SYSVOL" && letter != "ESP"))
 		{
@@ -1188,7 +1226,7 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &
 	else
 		recoveryId.set("integrity", "Bad");
 	recoveryId.set("backups", backupDetail);
-	recoveryId.set("clientId", convert(clientid));
+	recoveryId.set("clientId", convert(clientId));
 
 	return(completeStatus && integStatus);
 }
@@ -3627,7 +3665,7 @@ bool ClientMain::PreviousVirtualizeVerificationComplete()
 {
 	//check the virtStatus in virtualizationStatus column
 	//get the timestamp from it
-	//if timestamp is greater than 30 mins and virtStatus=1 reset that to 0, return true
+	//if timestamp is greater than 30 mins and virtStatus=VIRT_PENDING reset that to 0, return true
 	//else do not start the backup, return false
 	//
 	unsigned int duration = 30*60; //30 mins
@@ -3668,5 +3706,9 @@ bool ClientMain::PreviousVirtualizeVerificationComplete()
 		backup_dao->setVirtualizationStatus(clientid, output);
 		return true;
 	}
+	//If previous virtualization is success then new backup can be started. This condition applies mostly 
+	//for scheduled backup
+	if(virtstatus != VIRT_PENDING) return true;
+
 	return false;
 }

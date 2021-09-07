@@ -947,13 +947,17 @@ void ServerBackupDao::setImageBackupSynctime(int backupid)
 * @func void ServerBackupDao::setImageBackupComplete
 * @sql
 *       UPDATE backup_images SET complete=1 WHERE id=:backupid(int)
+*       If  status=1 //Backup completed
+*           status=3 //Virtualization boot verification is in progress. This is set to 1/0 based on success or failure of VBV
+*           	     //This is set to 1/0 by Virtualization script
 */
-void ServerBackupDao::setImageBackupComplete(int backupid)
+void ServerBackupDao::setImageBackupComplete(int backupid, int status)
 {
 	if(q_setImageBackupComplete==NULL)
 	{
-		q_setImageBackupComplete=db->Prepare("UPDATE backup_images SET complete=3 WHERE id=?", false);
+		q_setImageBackupComplete=db->Prepare("UPDATE backup_images SET complete=? WHERE id=?", false);
 	}
+	q_setImageBackupComplete->Bind(status);
 	q_setImageBackupComplete->Bind(backupid);
 	q_setImageBackupComplete->Write();
 	q_setImageBackupComplete->Reset();
@@ -1288,6 +1292,10 @@ ServerBackupDao::CondInt64 ServerBackupDao::hasRecentFullOrIncrImageBackup(const
 *		WHERE datetime('now', :backup_interval(string) )<backuptime
 *			AND clientid=:clientid(int) AND complete=1
 *           AND version=:image_version(int) AND letter=:letter(string)
+*
+*           complete=1 //Backup completed
+*           complete=3 //Virtualization boot verification is in progress. This is set to 1/0 based on success or failure of VBV
+*           	       //This is set to 1/0 by Virtualization script
 */
 ServerBackupDao::CondInt64 ServerBackupDao::hasRecentIncrImageBackup(const std::string& backup_interval, int clientid, int image_version, const std::string& letter)
 {
@@ -1783,6 +1791,7 @@ void ServerBackupDao::prepareQueries( void )
 	q_setVirtualizationStatus=NULL;
 	q_appendLogData=NULL;
 	q_incrementErrors=NULL;
+	q_IsVirtualBootVerificationDisabled=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1865,6 +1874,7 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_setVirtualizationStatus);
 	db->destroyQuery(q_appendLogData);
 	db->destroyQuery(q_incrementErrors);
+	db->destroyQuery(q_IsVirtualBootVerificationDisabled);
 }
 
 
@@ -1980,4 +1990,21 @@ void ServerBackupDao::incrementErrors(int id)
 	q_incrementErrors->Bind(id);
 	q_incrementErrors->Write();
 	q_incrementErrors->Reset();
+}
+
+bool ServerBackupDao::IsVirtualBootVerificationDisabled(int clientid)
+{
+	if(q_IsVirtualBootVerificationDisabled==NULL)
+	{
+		q_IsVirtualBootVerificationDisabled=db->Prepare("Select vbv_disabled FROM clients where id=?", false);
+	}
+
+	q_IsVirtualBootVerificationDisabled->Bind(clientid);
+	db_results res=q_IsVirtualBootVerificationDisabled->Read();
+	q_IsVirtualBootVerificationDisabled->Reset();
+	if(!res.empty())
+	{
+		return(watoi(res[0]["vbv_disabled"]));
+	}
+	return false;
 }

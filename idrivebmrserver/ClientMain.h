@@ -297,6 +297,7 @@ private:
 	bool GetIntegrityStatus(std::map<std::string, std::string> drivePath);
 	bool ValidateVirtualization(std::vector<int> backupIds, JSON::Object &virtObject);
 	void GetClientLogID(void);
+	void SetVirtualizationStatusOfClient(std::vector<int> backupIds);
 
 	std::string curr_image_format;
 

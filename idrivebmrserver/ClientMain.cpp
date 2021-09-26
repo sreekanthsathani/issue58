@@ -3692,6 +3692,9 @@ bool ClientMain::PreviousVirtualizeVerificationComplete()
 	int64 time_now = Server->getTimeSeconds();
 	std::string virtStatus = backup_dao->getVirtualizationStatus(clientid);
 
+	if(virtStatus.empty())
+		return true;
+
 	Json::Reader reader;
 	Json::Value root;
 

@@ -733,6 +733,12 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			reader.parse(virtJson, root);
 			virtStatus = root["VirtStatus"].asInt();
 		}
+		else
+		{
+			//this is the first backup after upgrading to VBV version of firmware
+			virtStatus = VIRT_SUCCESS;
+		}
+
 		std::string nonCbtBackup = "0";
 		nonCbtBackup = (virtStatus != VIRT_SUCCESS) ? "1" : "0";
 

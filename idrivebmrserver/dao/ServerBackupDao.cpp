@@ -1792,7 +1792,9 @@ void ServerBackupDao::prepareQueries( void )
 	q_appendLogData=NULL;
 	q_incrementErrors=NULL;
 	q_IsVirtualBootVerificationDisabled=NULL;
+	q_setVBVExecutionStatus=NULL;
 	q_readLogData=NULL;
+	q_getClientOS=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1876,7 +1878,9 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_appendLogData);
 	db->destroyQuery(q_incrementErrors);
 	db->destroyQuery(q_IsVirtualBootVerificationDisabled);
+	db->destroyQuery(q_setVBVExecutionStatus);
 	db->destroyQuery(q_readLogData);
+	db->destroyQuery(q_getClientOS);
 }
 
 
@@ -2025,4 +2029,33 @@ std::string ServerBackupDao::readLogData(int id)
 		return(res[0]["data"]);
 	}
 	return "";
+}
+
+void ServerBackupDao::setVBVExecutionStatus(int clientid, int status)
+{
+       if(q_setVBVExecutionStatus==NULL)
+       {
+               q_setVBVExecutionStatus=db->Prepare("UPDATE clients SET vbv_disabled=? where id=?", false);
+       }
+       q_setVBVExecutionStatus->Bind(status);
+       q_setVBVExecutionStatus->Bind(clientid);
+       q_setVBVExecutionStatus->Write();
+       q_setVBVExecutionStatus->Reset();
+}
+
+std::string ServerBackupDao::getClientOS(int clientid)
+{
+	if(q_getClientOS==NULL)
+	{
+		q_getClientOS=db->Prepare("SELECT os_version_str FROM clients WHERE id=?", false);
+	}
+	q_getClientOS->Bind(clientid);
+	db_results res=q_getClientOS->Read();
+	q_getClientOS->Reset();
+	std::string ret;
+	if(!res.empty())
+	{
+		ret=res[0]["os_version_str"];
+	}
+	return ret;
 }

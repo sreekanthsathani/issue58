@@ -179,6 +179,8 @@ public:
 	void incrementErrors(int id);
 	bool IsVirtualBootVerificationDisabled(int clientid);
 	std::string readLogData(int logid);
+	void setVBVExecutionStatus(int clientid, int status);
+	std::string getClientOS(int clientid);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -270,6 +272,8 @@ private:
 	IQuery* q_incrementErrors;
 	IQuery* q_IsVirtualBootVerificationDisabled;
 	IQuery* q_readLogData;
+	IQuery* q_setVBVExecutionStatus;
+	IQuery* q_getClientOS;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

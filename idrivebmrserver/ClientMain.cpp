@@ -425,7 +425,31 @@ void ClientMain::operator ()(void)
 	ServerSettings server_settings_updated(db, clientid);
 
 	bool do_exit_now=false;
-	
+
+	//disable vbv for old machines
+	std::string clientOs = backup_dao->getClientOS(clientid);
+	std::vector<std::string> VBVExclusionList = {"Windows 7", "2008", "Vista"};
+	bool disablevbv = false;
+	Server->Log("Client os is " + clientOs, LL_INFO);
+
+	for(int i=0; i<VBVExclusionList.size(); i++)
+	{
+		if(clientOs.find(VBVExclusionList[i]) != std::string::npos)
+		{
+			//if windows 7 32 bit do not disable vbv
+			if(clientOs.find("Windows 7") != std::string::npos && clientOs.find("32-bit") != std::string::npos)
+				break;
+			disablevbv = true;
+			break;
+		}
+	}
+
+	if(disablevbv)
+	{
+		Server->Log("Disabling VBV as the client OS doesn't support it", LL_INFO);
+		backup_dao->setVBVExecutionStatus(clientid, 1);
+	}
+
 	while(true)
 	{
 		if(!skip_checking)

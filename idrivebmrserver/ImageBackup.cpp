@@ -300,7 +300,7 @@ bool ImageBackup::doBackup()
 	if (ret)
 	{
 
-		int complete = backup_dao->IsVirtualBootVerificationDisabled(clientid)? 1 : 3;
+		int complete = backup_dao->getVBVExecutionStatus(clientid)? 1 : 3;
 		if (sysvol_id != -1)
 		{
 			backup_dao->saveImageAssociation(backupid, sysvol_id);
@@ -1698,7 +1698,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 										&& set_complete
 										&& sync_f.get() != NULL)
 									{
-										int complete = backup_dao->IsVirtualBootVerificationDisabled(clientid)? 1 : 3;
+										int complete = backup_dao->getVBVExecutionStatus(clientid)? 1 : 3;
 										backup_dao->setImageBackupComplete(backupid, complete);
 									}
 									if (sync_f.get() != NULL)

@@ -39,6 +39,12 @@ const int c_group_continuous = 1;
 const int c_group_max = 99;
 const int c_group_size = 100;
 
+enum VBVExecutionStatus{
+	VBV_ENABLE,
+	VBV_DISABLE,
+	VBV_OLD_CLIENT_DISABLE
+};
+
 struct SProtocolVersions
 {
 	SProtocolVersions() :
@@ -299,6 +305,7 @@ private:
 	void GetClientLogID(void);
 	void SetVirtualizationStatusOfClient(std::vector<int> backupIds);
 	void HandleLogsForAbortedBackup();
+	void enableDisableVBVForOldClients();
 
 	std::string curr_image_format;
 

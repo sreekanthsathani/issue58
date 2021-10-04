@@ -1791,10 +1791,11 @@ void ServerBackupDao::prepareQueries( void )
 	q_setVirtualizationStatus=NULL;
 	q_appendLogData=NULL;
 	q_incrementErrors=NULL;
-	q_IsVirtualBootVerificationDisabled=NULL;
+	q_getVBVExecutionStatus=NULL;
 	q_setVBVExecutionStatus=NULL;
 	q_readLogData=NULL;
 	q_getClientOS=NULL;
+	q_setVBVExecutionStatus=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1877,10 +1878,11 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_setVirtualizationStatus);
 	db->destroyQuery(q_appendLogData);
 	db->destroyQuery(q_incrementErrors);
-	db->destroyQuery(q_IsVirtualBootVerificationDisabled);
+	db->destroyQuery(q_getVBVExecutionStatus);
 	db->destroyQuery(q_setVBVExecutionStatus);
 	db->destroyQuery(q_readLogData);
 	db->destroyQuery(q_getClientOS);
+	db->destroyQuery(q_setVBVExecutionStatus);
 }
 
 
@@ -1998,21 +2000,21 @@ void ServerBackupDao::incrementErrors(int id)
 	q_incrementErrors->Reset();
 }
 
-bool ServerBackupDao::IsVirtualBootVerificationDisabled(int clientid)
+int ServerBackupDao::getVBVExecutionStatus(int clientid)
 {
-	if(q_IsVirtualBootVerificationDisabled==NULL)
+	if(q_getVBVExecutionStatus==NULL)
 	{
-		q_IsVirtualBootVerificationDisabled=db->Prepare("Select vbv_disabled FROM clients where id=?", false);
+		q_getVBVExecutionStatus=db->Prepare("Select vbv_exec_status FROM clients where id=?", false);
 	}
 
-	q_IsVirtualBootVerificationDisabled->Bind(clientid);
-	db_results res=q_IsVirtualBootVerificationDisabled->Read();
-	q_IsVirtualBootVerificationDisabled->Reset();
+	q_getVBVExecutionStatus->Bind(clientid);
+	db_results res=q_getVBVExecutionStatus->Read();
+	q_getVBVExecutionStatus->Reset();
 	if(!res.empty())
 	{
-		return(watoi(res[0]["vbv_disabled"]));
+		return(watoi(res[0]["vbv_exec_status"]));
 	}
-	return false;
+	return 0;
 }
 
 std::string ServerBackupDao::readLogData(int id)
@@ -2035,7 +2037,7 @@ void ServerBackupDao::setVBVExecutionStatus(int clientid, int status)
 {
        if(q_setVBVExecutionStatus==NULL)
        {
-               q_setVBVExecutionStatus=db->Prepare("UPDATE clients SET vbv_disabled=? where id=?", false);
+               q_setVBVExecutionStatus=db->Prepare("UPDATE clients SET vbv_exec_status=? where id=?", false);
        }
        q_setVBVExecutionStatus->Bind(status);
        q_setVBVExecutionStatus->Bind(clientid);

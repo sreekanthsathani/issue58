@@ -19,6 +19,8 @@ enum virtualizationErrorCode{
 	VIRT_INVALID
 };
 
+
+
 class ImageBackup : public Backup
 {
 public:

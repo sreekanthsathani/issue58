@@ -725,6 +725,26 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			}
 		}
 
+		std::string nonCbtBackup = "0";
+
+		//Issue https://github.com/idrive-online-backup/IDriveBMR-Server/issues/47
+		//If the dataset of last successful backup is deleted due to corruption or cloud integrity issues
+		//there will be data inconsistency if the next backup is cbt as the changes of deleted backup is not stored.
+		//Hence a non cbt backup is started, if the lastbackup_image time of clients table doesn't match the most recent
+		//C: drive backuptime of backup_images table
+		std::string lastImageBackupTime = backup_dao->getClientLastBackupTime(clientid);
+		ServerBackupDao::SImageBackup image_backup = backup_dao->getLastImage(clientid, client_main->getCurrImageVersion(), "C:");
+		if(!lastImageBackupTime.empty())
+		{
+			if(image_backup.backuptime != lastImageBackupTime)
+			{
+				nonCbtBackup = "1";
+				Server->Log("Looks like previous backup was corrupted", LL_INFO);
+				Server->Log("Initiating non cbt backup for the clientid " + convert(clientid), LL_INFO);
+			}
+
+		}
+
 		std::string virtJson = backup_dao->getVirtualizationStatus(clientid);
 		int virtStatus = VIRT_INVALID;
 		if(!virtJson.empty()){
@@ -739,8 +759,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 			virtStatus = VIRT_SUCCESS;
 		}
 
-		std::string nonCbtBackup = "0";
-		nonCbtBackup = (virtStatus != VIRT_SUCCESS) ? "1" : "0";
+		nonCbtBackup = (virtStatus != VIRT_SUCCESS) ? "1" : nonCbtBackup;
 
 		std::string ts = identity + "INCR IMAGE letter=" + pLetter + "&hashsize=" + convert(hashfile->Size()) + "&token=" + server_token + chksum_str + prevbitmap_str + "&noncbt=" + nonCbtBackup;
 		size_t rc = tcpstack.Send(cc, ts);

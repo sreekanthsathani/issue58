@@ -843,14 +843,14 @@ ServerBackupDao::SImageBackup ServerBackupDao::getLastImage(int clientid, int im
 {
 	if(q_getLastImage==NULL)
 	{
-		q_getLastImage=db->Prepare("SELECT id, incremental, path, (strftime('%s',running)-strftime('%s',backuptime)) AS duration FROM backup_images WHERE clientid=? AND complete=1 AND version=? AND letter=? ORDER BY backuptime DESC LIMIT 1", false);
+		q_getLastImage=db->Prepare("SELECT id, incremental, path, (strftime('%s',running)-strftime('%s',backuptime)) AS duration, (strftime('%s',backuptime)) AS backuptime FROM backup_images WHERE clientid=? AND complete=1 AND version=? AND letter=? ORDER BY backuptime DESC LIMIT 1", false);
 	}
 	q_getLastImage->Bind(clientid);
 	q_getLastImage->Bind(image_version);
 	q_getLastImage->Bind(letter);
 	db_results res=q_getLastImage->Read();
 	q_getLastImage->Reset();
-	SImageBackup ret = { false, 0, 0, "", 0 };
+	SImageBackup ret = { false, 0, 0, "", 0, ""};
 	if(!res.empty())
 	{
 		ret.exists=true;
@@ -858,6 +858,7 @@ ServerBackupDao::SImageBackup ServerBackupDao::getLastImage(int clientid, int im
 		ret.incremental=watoi(res[0]["incremental"]);
 		ret.path=res[0]["path"];
 		ret.duration=watoi64(res[0]["duration"]);
+		ret.backuptime=res[0]["backuptime"];
 	}
 	return ret;
 }
@@ -1796,6 +1797,7 @@ void ServerBackupDao::prepareQueries( void )
 	q_readLogData=NULL;
 	q_getClientOS=NULL;
 	q_setVBVExecutionStatus=NULL;
+	q_getClientLastBackupTime=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1882,6 +1884,7 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_setVBVExecutionStatus);
 	db->destroyQuery(q_readLogData);
 	db->destroyQuery(q_getClientOS);
+	db->destroyQuery(q_getClientLastBackupTime);
 	db->destroyQuery(q_setVBVExecutionStatus);
 }
 
@@ -2058,6 +2061,24 @@ std::string ServerBackupDao::getClientOS(int clientid)
 	if(!res.empty())
 	{
 		ret=res[0]["os_version_str"];
+	}
+	return ret;
+}
+
+std::string ServerBackupDao::getClientLastBackupTime(int clientid)
+{
+	std::string cmd = "SELECT strftime('%s', lastbackup_image) AS lastbackup_image FROM clients WHERE id=?";
+	if(q_getClientLastBackupTime==NULL)
+	{
+		q_getClientLastBackupTime=db->Prepare(cmd, false);
+	}
+	q_getClientLastBackupTime->Bind(clientid);
+	db_results res=q_getClientLastBackupTime->Read();
+	q_getClientLastBackupTime->Reset();
+	std::string ret;
+	if(!res.empty())
+	{
+		ret=res[0]["lastbackup_image"];
 	}
 	return ret;
 }

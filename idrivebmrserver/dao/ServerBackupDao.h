@@ -62,6 +62,7 @@ public:
 		int incremental;
 		std::string path;
 		int64 duration;
+		std::string backuptime;
 	};
 	struct SLastIncremental
 	{
@@ -181,6 +182,7 @@ public:
 	std::string readLogData(int logid);
 	void setVBVExecutionStatus(int clientid, int status);
 	std::string getClientOS(int clientid);
+	std::string getClientLastBackupTime(int clientid);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -274,6 +276,7 @@ private:
 	IQuery* q_readLogData;
 	IQuery* q_setVBVExecutionStatus;
 	IQuery* q_getClientOS;
+	IQuery* q_getClientLastBackupTime;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

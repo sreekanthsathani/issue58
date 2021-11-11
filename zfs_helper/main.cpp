@@ -123,6 +123,7 @@ int exec_wait(const std::string& path, bool keep_stdout, ...)
 			}
 			else
 			{
+
 				return -1;
 			}
 		}
@@ -230,41 +231,23 @@ std::string find_zfs_cmd()
 
 	if(!zfs_cmd.empty())
 	{
-		//return zfs_cmd;
+		return zfs_cmd;
 	}
-	else if(exec_wait("zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="zfs";
-		//return zfs_cmd;
+	std::vector<std::string> zfsPaths = {
+		"zfs",
+		"/sbin/zfs",
+		"/bin/zfs",
+		"/usr/sbin/zfs",
+		"/usr/bin/zfs"
+	};
+	for(auto zfsPath : zfsPaths) {
+		int rc = exec_wait(zfsPath, false, "--version", NULL);
+		if (rc == 0 || rc == 2) {
+			zfs_cmd = zfsPath;
+			return (zfs_cmd);
+		}
 	}
-	else if(exec_wait("/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/sbin/zfs";
-		//return zfs_cmd;
-	}
-	else if(exec_wait("/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/bin/zfs";
-		//return zfs_cmd;
-	}
-	else if(exec_wait("/usr/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/sbin/zfs";
-		//return zfs_cmd;
-	}
-	else if(exec_wait("/usr/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/bin/zfs";
-		//return zfs_cmd;
-	}
-	else
-	{
-		zfs_cmd="zfs";
-		//return zfs_cmd;
-	}
-
-	//std::cout << "zfs_cmd is " << zfs_cmd << std::endl;
-
+	zfs_cmd = "zfs";
 	return zfs_cmd;
 }
 
@@ -277,36 +260,24 @@ std::string find_zpool_cmd()
 		return zpool_cmd;
 	}
 
-	if(exec_wait("zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="zpool";
-		return zpool_cmd;
+	std::vector<std::string> zpoolPaths = {
+		"zpool",
+		"/sbin/zpool",
+		"/bin/zpool",
+		"/usr/sbin/zpool",
+		"/usr/bin/zpool"
+	};
+
+	for(auto zpoolPath : zpoolPaths) {
+		int rc = exec_wait(zpoolPath, false, "--version", NULL);
+		if (rc == 0 || rc == 2) {
+			zpool_cmd = zpoolPath;
+			return (zpool_cmd);
+		}
 	}
-	else if(exec_wait("/sbin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/sbin/zpool";
-		return zpool_cmd;
-	}
-	else if(exec_wait("/bin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/bin/zpool";
-		return zpool_cmd;
-	}
-	else if(exec_wait("/usr/sbin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/usr/sbin/zpool";
-		return zpool_cmd;
-	}
-	else if(exec_wait("/usr/bin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/usr/bin/zpool";
-		return zpool_cmd;
-	}
-	else
-	{
-		zpool_cmd="zpool";
-		return zpool_cmd;
-	}
+
+	zpool_cmd = "zpool";
+	return zpool_cmd;
 }
 
 #endif

@@ -292,42 +292,28 @@ std::string find_btrfs_cmd()
 std::string find_zfs_cmd()
 {
 	static std::string zfs_cmd;
-	
+
 	if(!zfs_cmd.empty())
 	{
 		return zfs_cmd;
 	}
-	
-	if(exec_wait("zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="zfs";
-		return zfs_cmd;
+	std::vector<std::string> zfsPaths = {
+		"zfs",
+		"/sbin/zfs",
+		"/bin/zfs",
+		"/usr/sbin/zfs",
+		"/usr/bin/zfs"
+	};
+
+	for(auto zfsPath : zfsPaths) {
+		int rc = exec_wait(zfsPath, false, "--version", NULL);
+		if (rc == 0 || rc == 2) {
+			zfs_cmd = zfsPath;
+			return (zfs_cmd);
+		}
 	}
-	else if(exec_wait("/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/sbin/zfs";
-		return zfs_cmd;
-	}
-	else if(exec_wait("/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/bin/zfs";
-		return zfs_cmd;
-	}
-	else if(exec_wait("/usr/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/sbin/zfs";
-		return zfs_cmd;
-	}
-	else if(exec_wait("/usr/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/bin/zfs";
-		return zfs_cmd;
-	}
-	else
-	{
-		zfs_cmd="zfs";
-		return zfs_cmd;
-	}
+	zfs_cmd = "zfs";
+	return zfs_cmd;
 }
 #endif
 

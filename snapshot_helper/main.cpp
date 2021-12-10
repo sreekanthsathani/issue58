@@ -25,6 +25,8 @@ const int mode_zfs_file=2;
 
 CServer *Server;
 
+bool removeVBVClones(std::vector<std::string> &dependencies);
+
 #ifdef _WIN32
 #include <Windows.h>
 
@@ -558,6 +560,7 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, 
                 {
 			if(is_subvolume(mode, subvolume_folder+"@ro"))
 			{
+
 				//if the snapshot is on hold skip deletion
 				if(IsSnapshotLocked(subvolume_folder+"@ro"))
 					return false;
@@ -565,6 +568,7 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, 
 				//if more than one dependencies for a snapshot.. skip that deletion
 				if(identify_dependencies((subvolume_folder+"@ro"),dependencies))
 				{
+					removeVBVClones(dependencies);
 					//if there are more than one or zero dependency then do not remove the snapshot
 					//as there might be virtual machine and incremental clone created at the same time
 					if(dependencies.size() > 1)
@@ -952,5 +956,22 @@ int main(int argc, char *argv[])
 		std::cout << "Command not found" << std::endl;
 		return 1;
 	}
+}
+
+bool removeVBVClones(std::vector<std::string> &dependencies)
+{
+	for(int i=0; i<dependencies.size(); i++) {
+		if(dependencies[i].find("_-_virT_") != std::string::npos) {
+
+			int rc = exec_wait(find_zfs_cmd(), false, "destroy", trim(dependencies[i]).c_str(), NULL);
+			if(rc!=0)
+			{
+				std::cout << "Failed to delete VBV clone " << dependencies[i] << std::endl;
+			}
+			std::cout << "Deleting VBV clone " << dependencies[i] << std::endl;
+			dependencies.erase(dependencies.begin()+i);
+		}
+	}
+	return true;
 }
 

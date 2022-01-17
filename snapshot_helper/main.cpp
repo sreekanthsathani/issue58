@@ -26,6 +26,7 @@ const int mode_zfs_file=2;
 CServer *Server;
 
 bool removeVBVClones(std::vector<std::string> &dependencies);
+bool removeSnapshotHold(const std::string snapshot, std::string tag);
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -560,6 +561,7 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, 
                 {
 			if(is_subvolume(mode, subvolume_folder+"@ro"))
 			{
+				removeSnapshotHold(subvolume_folder+"@ro", "delete");
 
 				//if the snapshot is on hold skip deletion
 				if(IsSnapshotLocked(subvolume_folder+"@ro"))
@@ -975,3 +977,15 @@ bool removeVBVClones(std::vector<std::string> &dependencies)
 	return true;
 }
 
+bool removeSnapshotHold(const std::string snapshot, std::string tag)
+{
+	std::cout << "Removing hold " << tag << " for "<< snapshot << std::endl;
+	std::string outData;
+	int rc = exec_wait(find_zfs_cmd(), outData, "release", tag.c_str(), snapshot.c_str(), NULL);
+	if(rc!=0){
+		std::cout << "Failed to remove " << tag << " hold on " << snapshot << std::endl;
+		return false;
+	}
+
+	return true;
+}

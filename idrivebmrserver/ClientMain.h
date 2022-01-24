@@ -307,6 +307,8 @@ private:
 	void HandleLogsForAbortedBackup();
 	void enableDisableVBVForOldClients();
 
+	std::string getHostname();
+	
 	std::string curr_image_format;
 
 	IPipe *pipe;

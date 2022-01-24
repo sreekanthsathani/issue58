@@ -3185,14 +3185,16 @@ bool ClientMain::authenticatePubKey()
 		}
 
 		std::string identity = ServerSettings::generateRandomAuthKey(20);
-
+		std::string bmrservername = getHostname();
+		Server->Log("ServerName:"+bmrservername, LL_INFO);
 		bool ret = sendClientMessageRetry("SIGNATURE#pubkey="+base64_encode_dash(pubkey)+
 			"&pubkey_ecdsa409k1="+base64_encode_dash(pubkey_ecdsa)+
 			"&signature="+base64_encode_dash(signature)+
 			"&signature_ecdsa409k1="+base64_encode_dash(signature_ecdsa409k1)+
 			"&session_identity="+identity +
+			"&bmrservername="+bmrservername+
 			(clientsubname.empty() ? "" : "&clientsubname="+clientsubname), "ok", "Error sending server signature to client", 10000, 10, true);
-
+		
 		if(ret)
 		{
 			IScopedLock lock(clientaddr_mutex);
@@ -3833,4 +3835,12 @@ bool ClientMain::PreviousVirtualizeVerificationComplete()
 	if(virtstatus != VIRT_PENDING) return true;
 
 	return false;
+}
+
+std::string ClientMain::getHostname()
+{
+	char hostname[1024];
+    gethostname(hostname, 1024);
+	std::string szhostname(hostname);
+    return szhostname;
 }

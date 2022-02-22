@@ -1796,7 +1796,6 @@ void ServerBackupDao::prepareQueries( void )
 	q_setVBVExecutionStatus=NULL;
 	q_readLogData=NULL;
 	q_getClientOS=NULL;
-	q_setVBVExecutionStatus=NULL;
 	q_getClientLastBackupTime=NULL;
 }
 
@@ -1881,7 +1880,6 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_appendLogData);
 	db->destroyQuery(q_incrementErrors);
 	db->destroyQuery(q_getVBVExecutionStatus);
-	db->destroyQuery(q_setVBVExecutionStatus);
 	db->destroyQuery(q_readLogData);
 	db->destroyQuery(q_getClientOS);
 	db->destroyQuery(q_getClientLastBackupTime);

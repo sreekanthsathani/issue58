@@ -510,9 +510,8 @@ void ClientMain::operator ()(void)
 	{
 		if(clientOs.find(VBVExclusionList[i]) != std::string::npos)
 		{
-			//if windows 7 32 bit do not disable vbv
-			if(clientOs.find("Windows 7") != std::string::npos && clientOs.find("32-bit") != std::string::npos)
-				break;
+
+			Server->Log("Disabling vbv for " + clientOs, LL_INFO);
 			disablevbv = true;
 			break;
 		}

@@ -726,7 +726,9 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 		}
 
 		std::string nonCbtBackup = "0";
-
+		//fix to disable vbv for all clients due to too many customer issues
+		//https://github.com/idrive-online-backup/IDriveBMR-Server/issues/52
+#if 0
 		//Issue https://github.com/idrive-online-backup/IDriveBMR-Server/issues/47
 		//If the dataset of last successful backup is deleted due to corruption or cloud integrity issues
 		//there will be data inconsistency if the next backup is cbt as the changes of deleted backup is not stored.
@@ -760,7 +762,7 @@ bool ImageBackup::doImage(const std::string &pLetter, const std::string &pParent
 		}
 
 		nonCbtBackup = (virtStatus != VIRT_SUCCESS) ? "1" : nonCbtBackup;
-
+#endif
 		std::string ts = identity + "INCR IMAGE letter=" + pLetter + "&hashsize=" + convert(hashfile->Size()) + "&token=" + server_token + chksum_str + prevbitmap_str + "&noncbt=" + nonCbtBackup;
 		size_t rc = tcpstack.Send(cc, ts);
 		if (rc == 0)

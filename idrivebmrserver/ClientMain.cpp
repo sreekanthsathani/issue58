@@ -500,6 +500,9 @@ void ClientMain::operator ()(void)
 
 	bool do_exit_now=false;
 
+	//fix to disable vbv for all clients due to too many customer issues
+	//https://github.com/idrive-online-backup/IDriveBMR-Server/issues/52
+#if 0
 	//disable vbv for old machines
 	std::string clientOs = backup_dao->getClientOS(clientid);
 	std::vector<std::string> VBVExclusionList = {"Windows 7", "2008", "Vista"};
@@ -522,6 +525,8 @@ void ClientMain::operator ()(void)
 		Server->Log("Disabling VBV as the client OS doesn't support it", LL_INFO);
 		backup_dao->setVBVExecutionStatus(clientid, VBV_DISABLE);
 	}
+#endif
+	backup_dao->setVBVExecutionStatus(clientid, VBV_DISABLE);
 
 	while(true)
 	{

@@ -243,39 +243,39 @@ int versionCompare(std::string v1, std::string v2)
 	return 0;
 }
 
-void ClientMain::enableDisableVBVForOldClients()
-{
+// void ClientMain::enableDisableVBVForOldClients()
+// {
 
-	//get client version
-	std::string curClient = sendClientMessage("CLIENTVERSION", "Getting client version of \"" + clientname + "\" failed.", 10000);
-	Server->Log("checking the client version " + curClient, LL_INFO);
-	if(!curClient.empty())
-	{
-		if(curClient == "ERR") //pre 4.4.0 version
-		{
-			Server->Log("Could not get client version. Disabling VBV.", LL_INFO);
-			backup_dao->setVBVExecutionStatus(clientid, VBV_OLD_CLIENT_DISABLE);
-		}
-		else
-		{
-			std::string vbvClientversion = "4.4.0";
-			if (versionCompare(curClient, vbvClientversion) == -1)
-			{
-				Server->Log("Client version does not support VBV", LL_INFO);
-				backup_dao->setVBVExecutionStatus(clientid, VBV_OLD_CLIENT_DISABLE);
-			}
-			else
-			{
-				Server->Log("Client version supports VBV", LL_INFO);
-				int vbvExecStatus = backup_dao->getVBVExecutionStatus(clientid);
-				if(vbvExecStatus == VBV_OLD_CLIENT_DISABLE)
-					backup_dao->setVBVExecutionStatus(clientid, VBV_ENABLE);
-			}
+// 	//get client version
+// 	std::string curClient = sendClientMessage("CLIENTVERSION", "Getting client version of \"" + clientname + "\" failed.", 10000);
+// 	Server->Log("checking the client version " + curClient, LL_INFO);
+// 	if(!curClient.empty())
+// 	{
+// 		if(curClient == "ERR") //pre 4.4.0 version
+// 		{
+// 			Server->Log("Could not get client version. Disabling VBV.", LL_INFO);
+// 			backup_dao->setVBVExecutionStatus(clientid, VBV_OLD_CLIENT_DISABLE);
+// 		}
+// 		else
+// 		{
+// 			std::string vbvClientversion = "4.4.0";
+// 			if (versionCompare(curClient, vbvClientversion) == -1)
+// 			{
+// 				Server->Log("Client version does not support VBV", LL_INFO);
+// 				backup_dao->setVBVExecutionStatus(clientid, VBV_OLD_CLIENT_DISABLE);
+// 			}
+// 			else
+// 			{
+// 				Server->Log("Client version supports VBV", LL_INFO);
+// 				int vbvExecStatus = backup_dao->getVBVExecutionStatus(clientid);
+// 				if(vbvExecStatus == VBV_OLD_CLIENT_DISABLE)
+// 					backup_dao->setVBVExecutionStatus(clientid, VBV_ENABLE);
+// 			}
 
-		}
-	}
+// 		}
+// 	}
 
-}
+// }
 void ClientMain::operator ()(void)
 {
 	if(!sendServerIdentity(true))
@@ -860,7 +860,8 @@ void ClientMain::operator ()(void)
 			{
 
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
-				enableDisableVBVForOldClients();
+				//for vbv disabled binary 
+				//enableDisableVBVForOldClients();
 				for(size_t i=0;i<vols.size();++i)
 				{
 					std::string letter=normalizeVolumeUpper(vols[i]);
@@ -885,7 +886,8 @@ void ClientMain::operator ()(void)
 				&& isBackupsRunningOkay(false) )
 			{
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
-				enableDisableVBVForOldClients();
+				//for vbv disabled binary 
+				//enableDisableVBVForOldClients();
 				for(size_t i=0;i<vols.size();++i)
 				{
 					std::string letter= normalizeVolumeUpper(vols[i]);

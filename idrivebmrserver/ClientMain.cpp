@@ -860,8 +860,7 @@ void ClientMain::operator ()(void)
 			{
 
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
-                                \\disabling client version check for vbv disabled binary
-				\\enableDisableVBVForOldClients();
+				enableDisableVBVForOldClients();
 				for(size_t i=0;i<vols.size();++i)
 				{
 					std::string letter=normalizeVolumeUpper(vols[i]);
@@ -886,8 +885,7 @@ void ClientMain::operator ()(void)
 				&& isBackupsRunningOkay(false) )
 			{
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
-				\\disabling client version check for vbv disabled binary
-				\\enableDisableVBVForOldClients();
+				enableDisableVBVForOldClients();
 				for(size_t i=0;i<vols.size();++i)
 				{
 					std::string letter= normalizeVolumeUpper(vols[i]);

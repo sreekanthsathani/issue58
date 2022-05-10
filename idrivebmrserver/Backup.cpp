@@ -138,12 +138,13 @@ void Backup::operator()()
 			int vbv_exec_status = backup_dao->getVBVExecutionStatus(clientid);
 			if(vbv_exec_status == VBV_DISABLE)
 				//ServerLogger::Log(logid, "Backup succeeded. Virtual Boot Verification Disabled.", LL_INFO);
-				ServerLogger::Log(logid, "Backup completed successfully.", LL_INFO);
+				ServerLogger::Log(logid, "Backup succeeded.", LL_INFO);
 			else
 			if(vbv_exec_status == VBV_OLD_CLIENT_DISABLE)
 				ServerLogger::Log(logid, "Backup succeeded. Client version doesn't support Virtual Boot Verification.", LL_INFO);
 			else
-				ServerLogger::Log(logid, "Backup succeeded. Initializing Virtual Boot Verification. Please wait for the final status of the backup", LL_INFO);
+				//ServerLogger::Log(logid, "Backup succeeded. Initializing Virtual Boot Verification. Please wait for the final status of the backup", LL_INFO);
+				ServerLogger::Log(logid, "Backup succeeded.", LL_INFO);
 		}
 		else
 		{

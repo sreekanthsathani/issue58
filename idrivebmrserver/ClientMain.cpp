@@ -1265,7 +1265,7 @@ bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
 		{
 			Server->Log("Error in postbackup.py script", LL_ERROR);
 		}
-		HandleLogsForAbortedBackup();
+		//HandleLogsForAbortedBackup();
 		return false;
 	}
 

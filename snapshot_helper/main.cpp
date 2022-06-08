@@ -25,6 +25,9 @@ const int mode_zfs_file=2;
 
 CServer *Server;
 
+bool removeVBVClones(std::vector<std::string> &dependencies);
+bool removeSnapshotHold(const std::string snapshot, std::string tag);
+
 #ifdef _WIN32
 #include <Windows.h>
 
@@ -292,42 +295,28 @@ std::string find_btrfs_cmd()
 std::string find_zfs_cmd()
 {
 	static std::string zfs_cmd;
-	
+
 	if(!zfs_cmd.empty())
 	{
 		return zfs_cmd;
 	}
-	
-	if(exec_wait("zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="zfs";
-		return zfs_cmd;
+	std::vector<std::string> zfsPaths = {
+		"zfs",
+		"/sbin/zfs",
+		"/bin/zfs",
+		"/usr/sbin/zfs",
+		"/usr/bin/zfs"
+	};
+
+	for(auto zfsPath : zfsPaths) {
+		int rc = exec_wait(zfsPath, false, "--version", NULL);
+		if (rc == 0 || rc == 2) {
+			zfs_cmd = zfsPath;
+			return (zfs_cmd);
+		}
 	}
-	else if(exec_wait("/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/sbin/zfs";
-		return zfs_cmd;
-	}
-	else if(exec_wait("/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/bin/zfs";
-		return zfs_cmd;
-	}
-	else if(exec_wait("/usr/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/sbin/zfs";
-		return zfs_cmd;
-	}
-	else if(exec_wait("/usr/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/bin/zfs";
-		return zfs_cmd;
-	}
-	else
-	{
-		zfs_cmd="zfs";
-		return zfs_cmd;
-	}
+	zfs_cmd = "zfs";
+	return zfs_cmd;
 }
 #endif
 
@@ -572,6 +561,8 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, 
                 {
 			if(is_subvolume(mode, subvolume_folder+"@ro"))
 			{
+				removeSnapshotHold(subvolume_folder+"@ro", "delete");
+
 				//if the snapshot is on hold skip deletion
 				if(IsSnapshotLocked(subvolume_folder+"@ro"))
 					return false;
@@ -579,6 +570,7 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false, 
 				//if more than one dependencies for a snapshot.. skip that deletion
 				if(identify_dependencies((subvolume_folder+"@ro"),dependencies))
 				{
+					removeVBVClones(dependencies);
 					//if there are more than one or zero dependency then do not remove the snapshot
 					//as there might be virtual machine and incremental clone created at the same time
 					if(dependencies.size() > 1)
@@ -968,3 +960,32 @@ int main(int argc, char *argv[])
 	}
 }
 
+bool removeVBVClones(std::vector<std::string> &dependencies)
+{
+	for(int i=0; i<dependencies.size(); i++) {
+		if(dependencies[i].find("_-_virT_") != std::string::npos) {
+
+			int rc = exec_wait(find_zfs_cmd(), false, "destroy", trim(dependencies[i]).c_str(), NULL);
+			if(rc!=0)
+			{
+				std::cout << "Failed to delete VBV clone " << dependencies[i] << std::endl;
+			}
+			std::cout << "Deleting VBV clone " << dependencies[i] << std::endl;
+			dependencies.erase(dependencies.begin()+i);
+		}
+	}
+	return true;
+}
+
+bool removeSnapshotHold(const std::string snapshot, std::string tag)
+{
+	std::cout << "Removing hold " << tag << " for "<< snapshot << std::endl;
+	std::string outData;
+	int rc = exec_wait(find_zfs_cmd(), outData, "release", tag.c_str(), snapshot.c_str(), NULL);
+	if(rc!=0){
+		std::cout << "Failed to remove " << tag << " hold on " << snapshot << std::endl;
+		return false;
+	}
+
+	return true;
+}

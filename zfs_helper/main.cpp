@@ -17,6 +17,7 @@ extern char **environ;
 #endif
 
 bool create_subvolume_with_encryption(std::string subvolume_folder, std::string encryption_key);
+bool removeSnapshotHold(const std::string snapshot, std::string tag);
 
 const int mode_zfs=1;
 
@@ -123,6 +124,7 @@ int exec_wait(const std::string& path, bool keep_stdout, ...)
 			}
 			else
 			{
+
 				return -1;
 			}
 		}
@@ -230,41 +232,23 @@ std::string find_zfs_cmd()
 
 	if(!zfs_cmd.empty())
 	{
-		//return zfs_cmd;
+		return zfs_cmd;
 	}
-	else if(exec_wait("zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="zfs";
-		//return zfs_cmd;
+	std::vector<std::string> zfsPaths = {
+		"zfs",
+		"/sbin/zfs",
+		"/bin/zfs",
+		"/usr/sbin/zfs",
+		"/usr/bin/zfs"
+	};
+	for(auto zfsPath : zfsPaths) {
+		int rc = exec_wait(zfsPath, false, "--version", NULL);
+		if (rc == 0 || rc == 2) {
+			zfs_cmd = zfsPath;
+			return (zfs_cmd);
+		}
 	}
-	else if(exec_wait("/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/sbin/zfs";
-		//return zfs_cmd;
-	}
-	else if(exec_wait("/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/bin/zfs";
-		//return zfs_cmd;
-	}
-	else if(exec_wait("/usr/sbin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/sbin/zfs";
-		//return zfs_cmd;
-	}
-	else if(exec_wait("/usr/bin/zfs", false, "--version", NULL)==2)
-	{
-		zfs_cmd="/usr/bin/zfs";
-		//return zfs_cmd;
-	}
-	else
-	{
-		zfs_cmd="zfs";
-		//return zfs_cmd;
-	}
-
-	//std::cout << "zfs_cmd is " << zfs_cmd << std::endl;
-
+	zfs_cmd = "zfs";
 	return zfs_cmd;
 }
 
@@ -277,36 +261,24 @@ std::string find_zpool_cmd()
 		return zpool_cmd;
 	}
 
-	if(exec_wait("zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="zpool";
-		return zpool_cmd;
+	std::vector<std::string> zpoolPaths = {
+		"zpool",
+		"/sbin/zpool",
+		"/bin/zpool",
+		"/usr/sbin/zpool",
+		"/usr/bin/zpool"
+	};
+
+	for(auto zpoolPath : zpoolPaths) {
+		int rc = exec_wait(zpoolPath, false, "--version", NULL);
+		if (rc == 0 || rc == 2) {
+			zpool_cmd = zpoolPath;
+			return (zpool_cmd);
+		}
 	}
-	else if(exec_wait("/sbin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/sbin/zpool";
-		return zpool_cmd;
-	}
-	else if(exec_wait("/bin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/bin/zpool";
-		return zpool_cmd;
-	}
-	else if(exec_wait("/usr/sbin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/usr/sbin/zpool";
-		return zpool_cmd;
-	}
-	else if(exec_wait("/usr/bin/zpool", false, "--version", NULL)==2)
-	{
-		zpool_cmd="/usr/bin/zpool";
-		return zpool_cmd;
-	}
-	else
-	{
-		zpool_cmd="zpool";
-		return zpool_cmd;
-	}
+
+	zpool_cmd = "zpool";
+	return zpool_cmd;
 }
 
 #endif
@@ -580,6 +552,7 @@ bool remove_subvolume(int mode, std::string subvolume_folder, bool quiet=false)
         std::vector<std::string> dependencies;
         if(is_subvolume(mode,subvolume_folder+"@ro"))
         {
+	    removeSnapshotHold(subvolume_folder+"@ro", "delete");
             if(IsSnapshotLocked(subvolume_folder+"@ro"))
                 return false;
 
@@ -1015,4 +988,17 @@ bool create_subvolume_with_encryption(std::string subvolume_folder, std::string 
 
     bool rc = pclose (f);
     return rc==0;
+}
+
+bool removeSnapshotHold(const std::string snapshot, std::string tag)
+{
+	std::cout << "Removing hold " << tag << " for "<< snapshot << std::endl;
+	std::string outData;
+	int rc = exec_wait(find_zfs_cmd(), outData, "release", tag.c_str(), snapshot.c_str(), NULL);
+	if(rc!=0){
+		std::cout << "Failed to remove " << tag << " hold on " << snapshot << std::endl;
+		return false;
+	}
+
+	return true;
 }

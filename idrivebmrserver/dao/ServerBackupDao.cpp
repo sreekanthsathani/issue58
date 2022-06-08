@@ -843,14 +843,14 @@ ServerBackupDao::SImageBackup ServerBackupDao::getLastImage(int clientid, int im
 {
 	if(q_getLastImage==NULL)
 	{
-		q_getLastImage=db->Prepare("SELECT id, incremental, path, (strftime('%s',running)-strftime('%s',backuptime)) AS duration FROM backup_images WHERE clientid=? AND complete=1 AND version=? AND letter=? ORDER BY backuptime DESC LIMIT 1", false);
+		q_getLastImage=db->Prepare("SELECT id, incremental, path, (strftime('%s',running)-strftime('%s',backuptime)) AS duration, (strftime('%s',backuptime)) AS backuptime FROM backup_images WHERE clientid=? AND complete=1 AND version=? AND letter=? ORDER BY backuptime DESC LIMIT 1", false);
 	}
 	q_getLastImage->Bind(clientid);
 	q_getLastImage->Bind(image_version);
 	q_getLastImage->Bind(letter);
 	db_results res=q_getLastImage->Read();
 	q_getLastImage->Reset();
-	SImageBackup ret = { false, 0, 0, "", 0 };
+	SImageBackup ret = { false, 0, 0, "", 0, ""};
 	if(!res.empty())
 	{
 		ret.exists=true;
@@ -858,6 +858,7 @@ ServerBackupDao::SImageBackup ServerBackupDao::getLastImage(int clientid, int im
 		ret.incremental=watoi(res[0]["incremental"]);
 		ret.path=res[0]["path"];
 		ret.duration=watoi64(res[0]["duration"]);
+		ret.backuptime=res[0]["backuptime"];
 	}
 	return ret;
 }
@@ -947,13 +948,17 @@ void ServerBackupDao::setImageBackupSynctime(int backupid)
 * @func void ServerBackupDao::setImageBackupComplete
 * @sql
 *       UPDATE backup_images SET complete=1 WHERE id=:backupid(int)
+*       If  status=1 //Backup completed
+*           status=3 //Virtualization boot verification is in progress. This is set to 1/0 based on success or failure of VBV
+*           	     //This is set to 1/0 by Virtualization script
 */
-void ServerBackupDao::setImageBackupComplete(int backupid)
+void ServerBackupDao::setImageBackupComplete(int backupid, int status)
 {
 	if(q_setImageBackupComplete==NULL)
 	{
-		q_setImageBackupComplete=db->Prepare("UPDATE backup_images SET complete=1 WHERE id=?", false);
+		q_setImageBackupComplete=db->Prepare("UPDATE backup_images SET complete=? WHERE id=?", false);
 	}
+	q_setImageBackupComplete->Bind(status);
 	q_setImageBackupComplete->Bind(backupid);
 	q_setImageBackupComplete->Write();
 	q_setImageBackupComplete->Reset();
@@ -1288,6 +1293,10 @@ ServerBackupDao::CondInt64 ServerBackupDao::hasRecentFullOrIncrImageBackup(const
 *		WHERE datetime('now', :backup_interval(string) )<backuptime
 *			AND clientid=:clientid(int) AND complete=1
 *           AND version=:image_version(int) AND letter=:letter(string)
+*
+*           complete=1 //Backup completed
+*           complete=3 //Virtualization boot verification is in progress. This is set to 1/0 based on success or failure of VBV
+*           	       //This is set to 1/0 by Virtualization script
 */
 ServerBackupDao::CondInt64 ServerBackupDao::hasRecentIncrImageBackup(const std::string& backup_interval, int clientid, int image_version, const std::string& letter)
 {
@@ -1779,6 +1788,15 @@ void ServerBackupDao::prepareQueries( void )
 	q_setImageUnmounted=NULL;
 	q_getMountedImage=NULL;
 	q_getOldMountedImages=NULL;
+	q_getVirtualizationStatus=NULL;
+	q_setVirtualizationStatus=NULL;
+	q_appendLogData=NULL;
+	q_incrementErrors=NULL;
+	q_getVBVExecutionStatus=NULL;
+	q_setVBVExecutionStatus=NULL;
+	q_readLogData=NULL;
+	q_getClientOS=NULL;
+	q_getClientLastBackupTime=NULL;
 }
 
 //@-SQLGenDestruction
@@ -1857,6 +1875,15 @@ void ServerBackupDao::destroyQueries( void )
 	db->destroyQuery(q_setImageUnmounted);
 	db->destroyQuery(q_getMountedImage);
 	db->destroyQuery(q_getOldMountedImages);
+	db->destroyQuery(q_getVirtualizationStatus);
+	db->destroyQuery(q_setVirtualizationStatus);
+	db->destroyQuery(q_appendLogData);
+	db->destroyQuery(q_incrementErrors);
+	db->destroyQuery(q_getVBVExecutionStatus);
+	db->destroyQuery(q_readLogData);
+	db->destroyQuery(q_getClientOS);
+	db->destroyQuery(q_getClientLastBackupTime);
+	db->destroyQuery(q_setVBVExecutionStatus);
 }
 
 
@@ -1910,6 +1937,146 @@ std::vector<ServerBackupDao::SBackupImageInfo> ServerBackupDao::getBackupInfo(st
 		ret[i].backuptime=watoi(res[i]["backuptimedata"]);
 		ret[i].complete=watoi(res[i]["complete"]);
 		ret[i].clientId=watoi(res[i]["clientid"]);
+	}
+	return ret;
+}
+
+/**
+* @-SQLGenAccess
+* @func <string> ServerBackupDao::getVirtualizationStatus
+* @return string virtualization status
+* @sql
+*     SELECT virtualizationStatus FROM clients where id=clientid
+*/
+std::string ServerBackupDao::getVirtualizationStatus(int clientid)
+{
+       if(q_getVirtualizationStatus==NULL)
+       {
+               q_getVirtualizationStatus=db->Prepare("SELECT virtualizationStatus FROM clients where id=?", false);
+       }
+       q_getVirtualizationStatus->Bind(clientid);
+       db_results res=q_getVirtualizationStatus->Read();
+       q_getVirtualizationStatus->Reset();
+       CondString ret = { false, "" };
+       if(!res.empty())
+       {
+       //      ret.exists=true;
+               ret.value=(res[0]["virtualizationStatus"]);
+       }
+       return ret.value;
+}
+
+void ServerBackupDao::setVirtualizationStatus(int clientid, std::string virtJson)
+{
+       if(q_setVirtualizationStatus==NULL)
+       {
+               q_setVirtualizationStatus=db->Prepare("UPDATE clients SET virtualizationStatus=? where id=?", false);
+       }
+       q_setVirtualizationStatus->Bind(virtJson);
+       q_setVirtualizationStatus->Bind(clientid);
+       q_setVirtualizationStatus->Write();
+       q_setVirtualizationStatus->Reset();
+}
+
+void ServerBackupDao::appendLogData(int id, std::string logmsg)
+{
+       if(q_appendLogData==NULL)
+       {
+               q_appendLogData=db->Prepare("UPDATE log_data SET data=data || ? WHERE id=?", false);
+       }
+       q_appendLogData->Bind(logmsg);
+       q_appendLogData->Bind(id);
+       q_appendLogData->Write();
+       q_appendLogData->Reset();
+}
+
+void ServerBackupDao::incrementErrors(int id)
+{
+	if(q_incrementErrors==NULL)
+	{
+		q_incrementErrors=db->Prepare("UPDATE logs SET errors=errors+1 WHERE id=?", false);
+	}
+	q_incrementErrors->Bind(id);
+	q_incrementErrors->Write();
+	q_incrementErrors->Reset();
+}
+
+int ServerBackupDao::getVBVExecutionStatus(int clientid)
+{
+	if(q_getVBVExecutionStatus==NULL)
+	{
+		q_getVBVExecutionStatus=db->Prepare("Select vbv_exec_status FROM clients where id=?", false);
+	}
+
+	q_getVBVExecutionStatus->Bind(clientid);
+	db_results res=q_getVBVExecutionStatus->Read();
+	q_getVBVExecutionStatus->Reset();
+	if(!res.empty())
+	{
+		return(watoi(res[0]["vbv_exec_status"]));
+	}
+	return 0;
+}
+
+std::string ServerBackupDao::readLogData(int id)
+{
+	if(q_readLogData==NULL)
+	{
+		q_readLogData=db->Prepare("Select data from log_data where id=?", false);
+	}
+	q_readLogData->Bind(id);
+	db_results res=q_readLogData->Read();
+	q_readLogData->Reset();
+	if(!res.empty())
+	{
+		return(res[0]["data"]);
+	}
+	return "";
+}
+
+void ServerBackupDao::setVBVExecutionStatus(int clientid, int status)
+{
+       if(q_setVBVExecutionStatus==NULL)
+       {
+               q_setVBVExecutionStatus=db->Prepare("UPDATE clients SET vbv_exec_status=? where id=?", false);
+       }
+       q_setVBVExecutionStatus->Bind(status);
+       q_setVBVExecutionStatus->Bind(clientid);
+       q_setVBVExecutionStatus->Write();
+       q_setVBVExecutionStatus->Reset();
+}
+
+std::string ServerBackupDao::getClientOS(int clientid)
+{
+	if(q_getClientOS==NULL)
+	{
+		q_getClientOS=db->Prepare("SELECT os_version_str FROM clients WHERE id=?", false);
+	}
+	q_getClientOS->Bind(clientid);
+	db_results res=q_getClientOS->Read();
+	q_getClientOS->Reset();
+	std::string ret;
+	if(!res.empty())
+	{
+		ret=res[0]["os_version_str"];
+	}
+	return ret;
+}
+
+std::string ServerBackupDao::getClientLastBackupTime(int clientid)
+{
+	std::string cmd = "SELECT strftime('%s', lastbackup_image) AS lastbackup_image FROM clients WHERE id=?";
+	if(q_getClientLastBackupTime==NULL)
+	{
+		q_getClientLastBackupTime=db->Prepare(cmd, false);
+	}
+	q_getClientLastBackupTime->Bind(clientid);
+	db_results res=q_getClientLastBackupTime->Read();
+	q_getClientLastBackupTime->Reset();
+	std::string ret;
+	if(!res.empty())
+	{
+		ret=res[0]["lastbackup_image"];
 	}
 	return ret;
 }

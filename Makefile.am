@@ -37,7 +37,7 @@ FORTIFY_FLAGS = -fstack-protector-strong --param=ssp-buffer-size=4 -Wformat -Wer
 FORTIFY_ldflags = -Wl,-z,relro
 endif
 
-idrivebmrsrv_LDADD = $(LIBCURL) $(PTHREAD_LIBS) $(DLOPEN_LIBS) $(FUSE_LIBS)
+idrivebmrsrv_LDADD = $(LIBCURL) $(PTHREAD_LIBS) $(DLOPEN_LIBS) $(FUSE_LIBS) -ljsoncpp
 idrivebmrsrv_CXXFLAGS = $(PTHREAD_CFLAGS) -DLINUX -DSTATIC_PLUGIN $(WITH_FUSEPLUGIN_CXXFLAGS) -DVARDIR='"$(localstatedir)"' -DBINDIR='"$(bindir)"' -DDATADIR='"$(datadir)"'
 idrivebmrsrv_CPPFLAGS = $(CRYPTOPP_CPPFLAGS) $(LIBCURL_CPPFLAGS) $(FUSE_CFLAGS) $(FORTIFY_FLAGS) -DSQLITE_PREPARE_RETRIES=5
 if !WITH_ASSERTIONS

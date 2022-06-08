@@ -62,6 +62,7 @@ public:
 		int incremental;
 		std::string path;
 		int64 duration;
+		std::string backuptime;
 	};
 	struct SLastIncremental
 	{
@@ -138,7 +139,7 @@ public:
 	void setImageSize(int64 size_bytes, int backupid);
 	void addImageSizeToClient(int clientid, int64 add_size);
 	void setImageBackupSynctime(int backupid);
-	void setImageBackupComplete(int backupid);
+	void setImageBackupComplete(int backupid, int status=3);
 	void setImageBackupIncomplete(int backupid);
 	void updateImageBackupRunning(int backupid);
 	void saveImageAssociation(int img_id, int assoc_id);
@@ -173,6 +174,15 @@ public:
 	SMountedImage getMountedImage(int backupid);
 	std::vector<SMountedImage> getOldMountedImages(int64 times);
         std::vector<SBackupImageInfo> getBackupInfo(std::vector<int> backupId);
+	std::string getVirtualizationStatus(int clientid);
+	void setVirtualizationStatus(int clientid, std::string virtJson);
+	void appendLogData(int id, std::string logmsg);
+	void incrementErrors(int id);
+	int getVBVExecutionStatus(int clientid);
+	std::string readLogData(int logid);
+	void setVBVExecutionStatus(int clientid, int status);
+	std::string getClientOS(int clientid);
+	std::string getClientLastBackupTime(int clientid);
 	//@-SQLGenFunctionsEnd
 
 	void updateOrInsertSetting(int clientid, const std::string& key, const std::string& value);
@@ -258,6 +268,15 @@ private:
 	IQuery* q_setImageUnmounted;
 	IQuery* q_getMountedImage;
 	IQuery* q_getOldMountedImages;
+	IQuery* q_getVirtualizationStatus;
+	IQuery* q_setVirtualizationStatus;
+	IQuery* q_appendLogData;
+	IQuery* q_incrementErrors;
+	IQuery* q_getVBVExecutionStatus;
+	IQuery* q_readLogData;
+	IQuery* q_setVBVExecutionStatus;
+	IQuery* q_getClientOS;
+	IQuery* q_getClientLastBackupTime;
 	//@-SQLGenVariablesEnd
 
 	IDatabase *db;

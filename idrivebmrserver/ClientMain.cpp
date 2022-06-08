@@ -64,8 +64,9 @@
 #include "ThrottleUpdater.h"
 #include "../fileservplugin/IFileServ.h"
 #include "DataplanDb.h"
-#include "../idrivebmrcommon/json.h"
 #include "stdlib.h"
+#include <fstream>
+#include <jsoncpp/json/json.h>
 
 extern IUrlFactory *url_fak;
 extern ICryptoFactory *crypto_fak;
@@ -201,6 +202,80 @@ void ClientMain::unloadSQL(void)
 	db->destroyQuery(q_set_logdata_sent);
 }
 
+// Method to compare two versions.
+// // Returns 1 if v2 is smaller, -1
+// // if v1 is smaller, 0 if equal
+int versionCompare(std::string v1, std::string v2)
+{
+	// vnum stores each numeric
+	// part of version
+	int vnum1 = 0, vnum2 = 0;
+
+	// loop until both string are
+	// processed
+	for (int i = 0, j = 0; (i < v1.length()
+				|| j < v2.length());) {
+		// storing numeric part of
+		// version 1 in vnum1
+		while (i < v1.length() && v1[i] != '.') {
+			vnum1 = vnum1 * 10 + (v1[i] - '0');
+			i++;
+		}
+
+		// storing numeric part of
+		// version 2 in vnum2
+		while (j < v2.length() && v2[j] != '.') {
+			vnum2 = vnum2 * 10 + (v2[j] - '0');
+			j++;
+		}
+
+		if (vnum1 > vnum2)
+			return 1;
+		if (vnum2 > vnum1)
+			return -1;
+
+		// if equal, reset variables and
+		// go for next numeric part
+		vnum1 = vnum2 = 0;
+		i++;
+		j++;
+	}
+	return 0;
+}
+
+// void ClientMain::enableDisableVBVForOldClients()
+// {
+
+// 	//get client version
+// 	std::string curClient = sendClientMessage("CLIENTVERSION", "Getting client version of \"" + clientname + "\" failed.", 10000);
+// 	Server->Log("checking the client version " + curClient, LL_INFO);
+// 	if(!curClient.empty())
+// 	{
+// 		if(curClient == "ERR") //pre 4.4.0 version
+// 		{
+// 			Server->Log("Could not get client version. Disabling VBV.", LL_INFO);
+// 			backup_dao->setVBVExecutionStatus(clientid, VBV_OLD_CLIENT_DISABLE);
+// 		}
+// 		else
+// 		{
+// 			std::string vbvClientversion = "4.4.0";
+// 			if (versionCompare(curClient, vbvClientversion) == -1)
+// 			{
+// 				Server->Log("Client version does not support VBV", LL_INFO);
+// 				backup_dao->setVBVExecutionStatus(clientid, VBV_OLD_CLIENT_DISABLE);
+// 			}
+// 			else
+// 			{
+// 				Server->Log("Client version supports VBV", LL_INFO);
+// 				int vbvExecStatus = backup_dao->getVBVExecutionStatus(clientid);
+// 				if(vbvExecStatus == VBV_OLD_CLIENT_DISABLE)
+// 					backup_dao->setVBVExecutionStatus(clientid, VBV_ENABLE);
+// 			}
+
+// 		}
+// 	}
+
+// }
 void ClientMain::operator ()(void)
 {
 	if(!sendServerIdentity(true))
@@ -424,7 +499,35 @@ void ClientMain::operator ()(void)
 	ServerSettings server_settings_updated(db, clientid);
 
 	bool do_exit_now=false;
-	
+
+	//fix to disable vbv for all clients due to too many customer issues
+	//https://github.com/idrive-online-backup/IDriveBMR-Server/issues/52
+#if 0
+	//disable vbv for old machines
+	std::string clientOs = backup_dao->getClientOS(clientid);
+	std::vector<std::string> VBVExclusionList = {"Windows 7", "2008", "Vista"};
+	bool disablevbv = false;
+	Server->Log("Client os is " + clientOs, LL_INFO);
+
+	for(int i=0; i<VBVExclusionList.size(); i++)
+	{
+		if(clientOs.find(VBVExclusionList[i]) != std::string::npos)
+		{
+
+			Server->Log("Disabling vbv for " + clientOs, LL_INFO);
+			disablevbv = true;
+			break;
+		}
+	}
+
+	if(disablevbv)
+	{
+		Server->Log("Disabling VBV as the client OS doesn't support it", LL_INFO);
+		backup_dao->setVBVExecutionStatus(clientid, VBV_DISABLE);
+	}
+#endif
+	backup_dao->setVBVExecutionStatus(clientid, VBV_DISABLE);
+
 	while(true)
 	{
 		if(!skip_checking)
@@ -556,7 +659,8 @@ void ClientMain::operator ()(void)
 										{
 											if (success)
 											{
-												backup_dao->setImageBackupComplete(it->first->getBackupId());
+												int complete = backup_dao->getVBVExecutionStatus(clientid) ? 1 : 3;
+												backup_dao->setImageBackupComplete(it->first->getBackupId(), complete);
 												backup_dao->updateClientLastImageBackup(it->first->getBackupId(), clientid);
 											}
 											ServerCleanupThread::unlockImageFromCleanup(it->first->getBackupId());
@@ -581,20 +685,23 @@ void ClientMain::operator ()(void)
 
 						send_logdata = true;
 						backup_queue.erase(backup_queue.begin() + i);
+						GetClientLogID();
 						if(backup_queue.empty() || count_image_backup_try )
 						{
 							int64 cpassed_time_s;
 							for(int i=0; i<allBackupsInDatabase.size(); i++)
 								Server->Log("BackupIds : " + convert(allBackupsInDatabase[i]), LL_INFO);
 							if (allBackupsInDatabase.size())
-								JsonizeRetrievedData(allBackupsInDatabase);
+							{
+								InvokePostBackupScripts(allBackupsInDatabase);
+								virtualizationLogid.clear();
+							}
 							allBackupsInDatabase.clear();
 							//Server->Log("Clearing allBackupsInDatabase", LL_INFO);
 						}
 						continue;
 					}
 				}
-
 				++i;
 			}
 
@@ -753,6 +860,8 @@ void ClientMain::operator ()(void)
 			{
 
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
+				//for vbv disabled binary 
+				//enableDisableVBVForOldClients();
 				for(size_t i=0;i<vols.size();++i)
 				{
 					std::string letter=normalizeVolumeUpper(vols[i]);
@@ -773,10 +882,12 @@ void ClientMain::operator ()(void)
 			}
 			else if(can_backup_images && !server_settings->getSettings()->no_images && (!internet_no_images || do_incr_image_now)
 				&& ((isUpdateIncrImage() && ServerSettings::isInTimeSpan(server_settings->getBackupWindowIncrImage()) 
-				&& exponentialBackoffImage() && pauseRetryBackup() && isDataplanOkay(false) && isOnline(channel_thread) ) || do_incr_image_now)
+				&& exponentialBackoffImage() && pauseRetryBackup() && isDataplanOkay(false) && isOnline(channel_thread) && PreviousVirtualizeVerificationComplete()) || do_incr_image_now)
 				&& isBackupsRunningOkay(false) )
 			{
 				std::vector<std::string> vols=server_settings->getBackupVolumes(all_volumes, all_nonusb_volumes);
+				//for vbv disabled binary 
+				//enableDisableVBVForOldClients();
 				for(size_t i=0;i<vols.size();++i)
 				{
 					std::string letter= normalizeVolumeUpper(vols[i]);
@@ -1016,11 +1127,179 @@ void ClientMain::operator ()(void)
 
 	delete this;
 }
+static void SetConstantParameters(JSON::Object &virtObject)
+{
+	std::string cpus = "4";
+	std::string memory = "4096";
+	std::string nwStatus = "Disconnected";
+	std::string nwType = "None";
+	std::string storController = "SATA";
+	std::string video = "QXL";
 
-bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
+	virtObject.set("vcpu", cpus);
+	virtObject.set("memory", memory);
+	JSON::Object networkParams;
+	networkParams.set("nw-source", nwStatus);
+	networkParams.set("nw-type", nwType);
+	virtObject.set("network_params",networkParams);
+	virtObject.set("stor_controller", storController);
+	virtObject.set("video", video);
+}
+
+bool ClientMain::ValidateVirtualization(std::vector<int> backupIds, JSON::Object &virtObject)
+{
+	int validateVirtualization = 3;
+	bool completeStatus = true;
+	std::vector<ServerBackupDao::SBackupImageInfo>
+		backupInfo = backup_dao->getBackupInfo(backupIds);
+	int clientId = -1;
+	if(!backupInfo.size()) return false; //may be wrong
+
+	JSON::Array volumeArray;
+	for(int i=0; i<backupInfo.size(); i++)
+	{
+		if(backupInfo[i].complete != validateVirtualization) //is this check needed?
+		{
+			return false;
+		}
+
+		volumeArray.add(backupInfo[i].path);
+		if(clientId == -1)
+			clientId = backupInfo[i].clientId;
+		else
+			clientId = (clientId == backupInfo[i].clientId) ? clientId : -1;
+	}
+
+	//Get the hostname
+	std::string backupPath(backupInfo[0].path);
+	std::string storageString("/storage/idrivebmr/");
+	std::size_t found = backupPath.find("/", storageString.length());
+	std::string host;
+	if (found!=std::string::npos)
+	{
+		int len = found - storageString.length();
+		host = backupPath.substr(storageString.length(), len);
+	}
+
+	SetConstantParameters(virtObject);
+	virtObject.set("volumes", volumeArray);
+	virtObject.set("clientid", clientId);
+	virtObject.set("hostname", host);
+	JSON::Array logids,ids;
+	for(auto v : virtualizationLogid)
+		logids.add(v);
+
+	for(auto backupId: backupIds)
+		ids.add(backupId);
+
+	virtualizationLogid.clear();
+	virtObject.set("logids", logids);
+	virtObject.set("backupIds", ids);
+	for(int i=0; i<virtualizationLogid.size(); i++)
+		Server->Log("in Validatevirt " + virtualizationLogid[i]);
+
+	JSON::Object clientVirtData;
+	clientVirtData.set("logids", logids);
+	clientVirtData.set("backupIds", ids);
+	clientVirtData.set("VirtStartTime", Server->getTimeSeconds());
+	clientVirtData.set("VirtStatus", VIRT_PENDING);
+	Server->Log("Client Virtualization data " + clientVirtData.stringify(false), LL_INFO);
+	backup_dao->setVirtualizationStatus(clientid, clientVirtData.stringify(true));
+
+	return true;
+}
+
+
+void ClientMain::SetVirtualizationStatusOfClient(std::vector<int> backupIds)
+{
+	JSON::Array logids,ids;
+	for(auto v : virtualizationLogid)
+		logids.add(v);
+
+	for(auto backupId: backupIds)
+		ids.add(backupId);
+
+	virtualizationLogid.clear();
+
+	JSON::Object clientVirtData;
+	clientVirtData.set("logids", logids);
+	clientVirtData.set("backupIds", ids);
+	clientVirtData.set("VirtStartTime", Server->getTimeSeconds());
+	//if VBV is disabled then it is assumed that Vitualization is successful and the value is set to VIRT_SUCCESS
+	clientVirtData.set("VirtStatus", VIRT_SUCCESS);
+	Server->Log("SetVirtualizationStatusOfClient " + clientVirtData.stringify(false), LL_INFO);
+	backup_dao->setVirtualizationStatus(clientid, clientVirtData.stringify(true));
+
+}
+
+void ClientMain::HandleLogsForAbortedBackup()
+{
+	std::vector<std::string> logids(virtualizationLogid);
+	std::string logmsg;
+	std::string msgBody = "Virtual Boot Verification skipped as the backup failed for few volumes in this session";
+	int64 time_now = Server->getTimeSeconds();
+	for(int i = 0; i < logids.size(); i++)
+	{
+		int id = stoi(logids[i]);
+		if (backup_dao->readLogData(id).find("Backup succeeded") != std::string::npos){
+			int id = stoi(logids[i]);
+			logmsg = "2-" + std::to_string(time_now) + "-" + msgBody;
+			backup_dao->appendLogData(id, logmsg);
+			//increment errors column in logs table
+			backup_dao->incrementErrors(id);
+		}
+	}
+}
+
+bool ClientMain::InvokePostBackupScripts(std::vector<int> backupInfo)
+{
+	JSON::Object backupJsondata;
+	bool backupIntegSuccess = JsonizeRetrievedData(backupInfo, backupJsondata);
+	int isVBVDisabled = backup_dao->getVBVExecutionStatus(clientid);
+
+	if(!backupIntegSuccess)
+	{
+		//run postbackup.py script
+		Server->Log("Postbackup data " + backupJsondata.stringify(false), LL_INFO);
+		if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + backupJsondata.stringify(true) + "\'", logid))
+		{
+			Server->Log("Error in postbackup.py script", LL_ERROR);
+		}
+		//HandleLogsForAbortedBackup();
+		return false;
+	}
+
+	if(backupIntegSuccess && isVBVDisabled)
+	{
+		Server->Log("VBV disabled. Postbackup data " + backupJsondata.stringify(false), LL_INFO);
+		if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + backupJsondata.stringify(true) + "\'", logid))
+		{
+			Server->Log("Error in postbackup.py script", LL_ERROR);
+		}
+
+		//if vbv is disabled then simply set the virtStatus=SUCCESS in ValidateVirtualization() in clients table and exit
+		SetVirtualizationStatusOfClient(backupInfo);
+		return true;
+	}
+	JSON::Object virtData;
+	ValidateVirtualization(backupInfo, virtData);
+
+	JSON::Object virtObject;
+	virtObject.set("vm_params", virtData);
+	virtObject.set("postbackup_data", backupJsondata);
+	Server->Log("Assembled data "+ virtObject.stringify(true));
+	std::string cmd = "/usr/local/bin/python3";
+	std::string params = " /usr/share/idrivebmr/run Virtualization --verify-physical '" + virtObject.stringify(true) + "'";
+	if (!ClientMain::run_script(cmd, params, logid))
+	{
+		Server->Log("Error in calling Virtualization script", LL_ERROR);
+	}
+	return true;
+}
+
+bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &recoveryId)
 {
 	std::vector<std::string> paths;
-	JSON::Object recoveryId;
 	JSON::Array backupDetail;
 
 	int64 backupTime = 0;
@@ -1030,7 +1309,7 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 		backupInfo = backup_dao->getBackupInfo(backupIds);
 
 	bool completeStatus = true;
-	int clientid = -1;
+	int clientId = -1;
 	std::map<std::string, std::string> drivesPaths;
 
 	//ToBe tested
@@ -1039,10 +1318,10 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 	for ( int i = 0; i < backupInfo.size(); i++)
 	{
 		std::string letter = backupInfo[i].letter;
-		if(clientid == -1)
-			clientid = backupInfo[i].clientId;
+		if(clientId == -1)
+			clientId = backupInfo[i].clientId;
 		else
-			clientid = (clientid == backupInfo[i].clientId) ? clientid : -1;
+			clientId = (clientId == backupInfo[i].clientId) ? clientId : -1;
 
 		if(!backupTime && (letter != "SYSVOL" && letter != "ESP"))
 		{
@@ -1063,19 +1342,18 @@ bool ClientMain::JsonizeRetrievedData(std::vector<int> backupIds)
 
 	recoveryId.set("recoveryID", timeStr);
 	recoveryId.set("status", completeStatus ? "Success" : "Failed");
+	bool integStatus = false;
 	if(completeStatus)
-		recoveryId.set("integrity", GetIntegrityStatus(drivesPaths) ? "Good" : "Bad");
+	{
+		integStatus = GetIntegrityStatus(drivesPaths);
+		recoveryId.set("integrity", integStatus ? "Good" : "Bad");
+	}
 	else
 		recoveryId.set("integrity", "Bad");
 	recoveryId.set("backups", backupDetail);
-	recoveryId.set("clientId", convert(clientid));
-	Server->Log("JsonString to postinstallscript " + recoveryId.stringify(false), LL_INFO);
+	recoveryId.set("clientId", convert(clientId));
 
-	if (!ClientMain::run_script("idrivebmr" + os_file_sep() + "postbackup.py", "-in \'" + recoveryId.stringify(true) + "\'", logid))
-	{
-		Server->Log("Error in postbackup.py script", LL_ERROR);
-	}
-
+	return(completeStatus && integStatus);
 }
 
 bool ClientMain::GetIntegrityStatus(std::map<std::string, std::string> drivespaths)
@@ -1983,7 +2261,17 @@ void ClientMain::sendClientLogdata(void)
 		}
 	}
 }
+void ClientMain::GetClientLogID(void)
+{
+	q_get_unsent_logdata->Bind(clientid);
+	db_results res=q_get_unsent_logdata->Read();
+	q_get_unsent_logdata->Reset();
 
+	for(size_t i=0;i<res.size();++i)
+	{
+		virtualizationLogid.push_back(res[i]["id"]);
+	}
+}
 MailServer ClientMain::getMailServerSettings(void)
 {
 	ISettingsReader *settings=Server->createDBSettingsReader(Server->getDatabase(Server->getThreadID(), IDRIVEBMRDB_SERVER), "settings_db.settings", "SELECT value FROM settings_db.settings WHERE key=? AND clientid=0");
@@ -2219,7 +2507,6 @@ bool ClientMain::isBackupsRunningOkay(bool file, bool incr)
 				++running_file_backups;
 			}
 		}
-
 		return running_backups_allowed;
 	}
 	else
@@ -2729,7 +3016,9 @@ unsigned int ClientMain::exponentialBackoffTimeFile()
 
 bool ClientMain::exponentialBackoffImage()
 {
-	return exponentialBackoff(count_image_backup_try, last_image_backup_try, c_sleeptime_failed_imagebackup, c_exponential_backoff_div);
+	bool res = exponentialBackoff(count_image_backup_try, last_image_backup_try, c_sleeptime_failed_imagebackup, c_exponential_backoff_div);
+	Server->Log("exponentialBackoff " + convert(res));
+	return res;
 }
 
 bool ClientMain::exponentialBackoffFile()
@@ -2744,7 +3033,8 @@ bool ClientMain::exponentialBackoffCdp()
 
 bool ClientMain::pauseRetryBackup()
 {
-	return Server->getTimeMS() - last_backup_try >= 5 * 60 * 1000;
+	bool res = Server->getTimeMS() - last_backup_try >= 5 * 60 * 1000;
+	return res;
 }
 
 bool ClientMain::sendServerIdentity(bool retry_exit)
@@ -2901,14 +3191,16 @@ bool ClientMain::authenticatePubKey()
 		}
 
 		std::string identity = ServerSettings::generateRandomAuthKey(20);
-
+		std::string bmrservername = getHostname();
+		Server->Log("ServerName:"+bmrservername, LL_INFO);
 		bool ret = sendClientMessageRetry("SIGNATURE#pubkey="+base64_encode_dash(pubkey)+
 			"&pubkey_ecdsa409k1="+base64_encode_dash(pubkey_ecdsa)+
 			"&signature="+base64_encode_dash(signature)+
 			"&signature_ecdsa409k1="+base64_encode_dash(signature_ecdsa409k1)+
 			"&session_identity="+identity +
-			(clientsubname.empty() ? "" : "&clientsubname="+clientsubname), "ok", "Error sending server signature to client", 10000, 10, true);
-
+			(clientsubname.empty() ? "" : "&clientsubname="+clientsubname)+
+			"&bmrservername="+bmrservername, "ok", "Error sending server signature to client", 10000, 10, true);
+		
 		if(ret)
 		{
 			IScopedLock lock(clientaddr_mutex);
@@ -3494,4 +3786,67 @@ bool ClientMain::UpdateCloudVirtualization(int backupId)
 {
 	allBackupsInDatabase.push_back(backupId);
 	return true;
+}
+
+bool ClientMain::PreviousVirtualizeVerificationComplete()
+{
+	//check the virtStatus in virtualizationStatus column
+	//get the timestamp from it
+	//if timestamp is greater than 30 mins and virtStatus=VIRT_PENDING reset that to 0, return true
+	//else do not start the backup, return false
+	//
+	unsigned int duration = 30*60; //30 mins
+	int64 time_now = Server->getTimeSeconds();
+	std::string virtStatus = backup_dao->getVirtualizationStatus(clientid);
+
+	if(virtStatus.empty())
+		return true;
+
+	Json::Reader reader;
+	Json::Value root;
+
+	reader.parse(virtStatus, root);
+	uint64 virtStartTime = root["VirtStartTime"].asUInt64();
+	int virtstatus = root["VirtStatus"].asInt();
+        Json::Value bkpid = root["backupIds"];
+	Json::Value logids = root["logids"];
+
+	uint64 elapsedtime = time_now - virtStartTime;
+	//if elapsedTime is greater than 30 min and previous virtualization is still pending then
+	//the previous backup is marked as failed and logs table is updated with proper message
+	if(elapsedtime >= duration && virtstatus == VIRT_PENDING)
+	{
+		Server->Log("Virtualization Timeout: Setting previous backup as failure", LL_WARNING);
+		for(int i = 0; i < bkpid.size(); i++){
+			backup_dao->setImageBackupIncomplete(bkpid[i].asInt());
+		}
+		std::string logmsg;
+		for(int i = 0; i < logids.size(); i++){
+			int id = stoi(logids[i].asString());
+			logmsg = "2-" + std::to_string(time_now) + "-Virtualization Timeout";
+			backup_dao->appendLogData(id, logmsg);
+			//increment errors column in logs table
+			backup_dao->incrementErrors(id);
+		}
+
+		//Setting virtualization status failed
+		root["VirtStatus"] = VIRT_FAILED;
+		Json::FastWriter fastWriter;
+		std::string output = fastWriter.write(root);
+		backup_dao->setVirtualizationStatus(clientid, output);
+		return true;
+	}
+	//If previous virtualization is success then new backup can be started. This condition applies mostly 
+	//for scheduled backup
+	if(virtstatus != VIRT_PENDING) return true;
+
+	return false;
+}
+
+std::string ClientMain::getHostname()
+{
+	char hostname[1024];
+	gethostname(hostname, 1024);
+	std::string szhostname(hostname);
+	return szhostname;
 }

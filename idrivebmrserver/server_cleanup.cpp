@@ -1046,6 +1046,7 @@ void ServerCleanupThread::cleanup_images(int64 minspace, bool isZFSFilesystem)
 			{
 				ServerLogger::Log(logid, "Deleting incomplete image \"" + incomplete_images[i].path + "\" failed.", LL_WARNING);
 			}
+			else
 			cleanupdao->removeImage(incomplete_images[i].id);
 		}
 	}

@@ -1197,7 +1197,7 @@ idrivebmrsrv_SOURCES = AcceptThread.cpp Client.cpp Database.cpp \
 @WITH_FORTIFY_TRUE@FORTIFY_FLAGS = -fstack-protector-strong --param=ssp-buffer-size=4 -Wformat -Werror=format-security -D_FORTIFY_SOURCE=2 -fPIE
 @WITH_FORTIFY_TRUE@FORTIFY_ldflags = -Wl,-z,relro
 idrivebmrsrv_LDADD = $(LIBCURL) $(PTHREAD_LIBS) $(DLOPEN_LIBS) \
-	$(FUSE_LIBS) $(am__append_6)
+	$(FUSE_LIBS) -ljsoncpp $(am__append_6)
 idrivebmrsrv_CXXFLAGS = $(PTHREAD_CFLAGS) -DLINUX -DSTATIC_PLUGIN \
 	$(WITH_FUSEPLUGIN_CXXFLAGS) -DVARDIR='"$(localstatedir)"' \
 	-DBINDIR='"$(bindir)"' -DDATADIR='"$(datadir)"' \

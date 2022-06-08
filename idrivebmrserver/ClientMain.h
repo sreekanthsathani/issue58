@@ -16,6 +16,7 @@
 #include "../idrivebmrcommon/sha2/sha2.h"
 #include "../idrivebmrcommon/fileclient/tcpstack.h"
 #include "server_settings.h"
+#include "../idrivebmrcommon/json.h"
 
 #include <memory>
 #include "server_log.h"
@@ -37,6 +38,12 @@ const int c_group_default = 0;
 const int c_group_continuous = 1;
 const int c_group_max = 99;
 const int c_group_size = 100;
+
+enum VBVExecutionStatus{
+	VBV_ENABLE,
+	VBV_DISABLE,
+	VBV_OLD_CLIENT_DISABLE
+};
 
 struct SProtocolVersions
 {
@@ -172,6 +179,7 @@ public:
 	static void destroyTemporaryFile(IFile *tmp);
 
 	bool UpdateCloudVirtualization(int backupId);
+	bool PreviousVirtualizeVerificationComplete();
 	
 	
 	virtual void log_progress( const std::string& fn, int64 total, int64 downloaded, int64 speed_bps );
@@ -289,9 +297,18 @@ private:
 	static void cleanupShare(SShareCleanup& tocleanup);
 
 	void finishFailedRestore(std::string restore_identity, logid_t log_id, int64 status_id, int64 restore_id);
-	bool JsonizeRetrievedData(std::vector<int> backupInfo);
+	//bool JsonizeRetrievedData(std::vector<int> backupInfo, std::string &jsonData);
+	bool JsonizeRetrievedData(std::vector<int> backupIds, JSON::Object &recoveryId);
+	bool InvokePostBackupScripts(std::vector<int> backupInfo);
 	bool GetIntegrityStatus(std::map<std::string, std::string> drivePath);
+	bool ValidateVirtualization(std::vector<int> backupIds, JSON::Object &virtObject);
+	void GetClientLogID(void);
+	void SetVirtualizationStatusOfClient(std::vector<int> backupIds);
+	void HandleLogsForAbortedBackup();
+	void enableDisableVBVForOldClients();
 
+	std::string getHostname();
+	
 	std::string curr_image_format;
 
 	IPipe *pipe;
@@ -399,4 +416,5 @@ private:
 	volatile bool do_reauthenticate;
 
 	std::vector<int> allBackupsInDatabase;
+	std::vector<std::string> virtualizationLogid;
 };

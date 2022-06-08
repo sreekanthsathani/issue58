@@ -497,7 +497,7 @@ ACTION_IMPL(status)
 {
 	Helper helper(tid, &POST, &PARAMS);
 	JSON::Object ret;
-	std::vector<std::string> iplist;
+	//std::vector<std::string> iplist;
 
 	std::string rights=helper.getRights("status");
 	std::vector<int> clientids;
@@ -695,7 +695,7 @@ ACTION_IMPL(status)
 
 					unsigned char *ips=(unsigned char*)&client_status[j].ip_addr;
 					ip=convert(ips[0])+"."+convert(ips[1])+"."+convert(ips[2])+"."+convert(ips[3]);
-					iplist.push_back(ip);
+					//iplist.push_back(ip);
 					client_version_string=client_status[j].client_version_string;
 					os_version_string=client_status[j].os_version_string;
 
@@ -771,7 +771,7 @@ ACTION_IMPL(status)
 				unsigned char *ips=(unsigned char*)&client_status[i].ip_addr;
 				ip=convert(ips[0])+"."+convert(ips[1])+"."+convert(ips[2])+"."+convert(ips[3]);
 				stat.set("ip", ip);
-				iplist.push_back(ip);
+				//iplist.push_back(ip);
 
 				switch(client_status[i].status_error)
 				{
@@ -811,17 +811,17 @@ ACTION_IMPL(status)
 			res=db->Read("SELECT id, hostname, lastip FROM settings_db.extra_clients");
 			for(size_t i=0;i<res.size();++i)
 			{
-				sort(iplist.begin(), iplist.end());
-				iplist.erase(unique(iplist.begin(), iplist.end()), iplist.end());
+				//sort(iplist.begin(), iplist.end());
+				//iplist.erase(unique(iplist.begin(), iplist.end()), iplist.end());
 
-				if (std::find(iplist.begin(), iplist.end(), res[i]["hostname"]) != iplist.end()) {
+				//if (std::find(iplist.begin(), iplist.end(), res[i]["hostname"]) != iplist.end()) {
 
-					IQuery* q = db->Prepare("DELETE FROM settings_db.extra_clients WHERE hostname=?");
-					q->Bind(res[i]["hostname"]);
-					q->Write();
-					q->Reset();
-				}
-				else {
+				//	IQuery* q = db->Prepare("DELETE FROM settings_db.extra_clients WHERE hostname=?");
+				//	q->Bind(res[i]["hostname"]);
+				//	q->Write();
+				//	q->Reset();
+				//}
+				//else {
 					JSON::Object extra_client;
 
 					extra_client.set("hostname", res[i]["hostname"]);
@@ -841,7 +841,7 @@ ACTION_IMPL(status)
 					extra_client.set("online", online);
 
 					extra_clients.add(extra_client);
-				}
+			//	}
 
 			}
 			ret.set("allow_extra_clients", true);

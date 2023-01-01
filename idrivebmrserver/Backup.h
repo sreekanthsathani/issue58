@@ -85,7 +85,7 @@ public:
 	{
 		return scheduled;
 	}
-
+	void sendschedulebackupalertMail();
 protected:
 	virtual bool doBackup() = 0;
 

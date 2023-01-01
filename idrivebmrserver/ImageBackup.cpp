@@ -132,7 +132,7 @@ std::vector<ImageBackup::SImageDependency> ImageBackup::getDependencies(bool res
 
 bool ImageBackup::doBackup()
 {
-
+	//backuptriggered = true;
 	bool cowraw_format = server_settings->getImageFileFormat() == image_file_format_cowraw;
 
 	if (r_incremental)

@@ -28,6 +28,9 @@
 #include "Interface/Mutex.h"
 #include "Interface/Condition.h"
 #include "Interface/Service.h"
+#include "idrivebmrserver/notification.h"
+
+BackupAlert *alertmail;
 
 CServiceAcceptor::CServiceAcceptor(IService * pService, std::string pName, unsigned short port, int pMaxClientsPerThread, IServer::BindTarget bindTarget)
 	: maxClientsPerThread(pMaxClientsPerThread)
@@ -103,6 +106,7 @@ CServiceAcceptor::CServiceAcceptor(IService * pService, std::string pName, unsig
 	listen(s, 10000);
 
 	Server->Log(name+": Server started up successfully!",LL_INFO);
+	alertmail->ScheduledBackupAlert();  //sree for alertmail
 }
 
 CServiceAcceptor::~CServiceAcceptor()

@@ -669,7 +669,11 @@ std::vector<STimeSpan> ServerSettings::getBackupWindowIncrImage(void)
 	std::string window=getSettings()->backup_window_incr_image;
 	return getWindow(window);
 }
-
+std::string ServerSettings::getBackupWindowIncrImagestring(void)
+{
+	std::string window = getSettings()->backup_window_incr_image;
+	return window;
+}
 std::vector<STimeSpan> ServerSettings::getBackupWindowFullImage(void)
 {
 	std::string window=getSettings()->backup_window_full_image;

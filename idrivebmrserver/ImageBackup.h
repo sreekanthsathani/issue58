@@ -37,7 +37,10 @@ public:
 	{
 		return not_found;
 	}
-
+	bool isbackuptriggered()
+	{
+		return backuptriggered;
+	}
 	std::string getLetter()
 	{
 		return letter;
@@ -83,6 +86,8 @@ protected:
 	bool synthetic_full;
 
 	bool not_found;
+
+	bool backuptriggered=false;
 
 	int backupid;
 

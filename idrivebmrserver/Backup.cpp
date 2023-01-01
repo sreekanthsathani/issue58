@@ -347,7 +347,64 @@ void Backup::sendLogdataMail(bool r_success, int image, int incremental, bool re
 		}
 	}
 }
+void Backup::sendschedulebackupalertMail()
+{
+	MailServer mail_server = ClientMain::getMailServerSettings();
+	if (mail_server.servername.empty())
+		return;
 
+	if (url_fak == NULL)
+		return;
+
+	std::vector<int> mailable_user_ids = backup_dao->getMailableUserIds();
+	for (size_t i = 0; i<mailable_user_ids.size(); ++i)
+	{
+		std::string logr = getUserRights(mailable_user_ids[i], "logs");
+		bool has_r = false;
+		if (logr != "all")
+		{
+			std::vector<std::string> toks;
+			Tokenize(logr, toks, ",");
+			for (size_t j = 0; j<toks.size(); ++j)
+			{
+				if (watoi(toks[j]) == clientid)
+				{
+					has_r = true;
+				}
+			}
+		}
+		else
+		{
+			has_r = true;
+		}
+
+		if (has_r)
+		{
+			ServerBackupDao::SReportSettings report_settings =
+				backup_dao->getUserReportSettings(mailable_user_ids[i]);
+
+			if (report_settings.exists)
+			{
+				std::string report_mail = report_settings.report_mail;
+				std::vector<std::string> to_addrs;
+				Tokenize(report_mail, to_addrs, ",;");
+
+				std::string subj = "BMR: ";
+				std::string msg = "Scheduled ";
+
+				subj += "backup of \"" + clientname + "\"\n";
+				msg += "backup of \"" + clientname + "have been missed" + "\".\n";
+				std::string errmsg;
+				bool b = url_fak->sendMail(mail_server, to_addrs, subj, msg, &errmsg);
+				if (!b)
+				{
+					Server->Log("Sending mail failed. " + errmsg, LL_WARNING);
+				}
+
+			}
+		}
+	}
+}
 std::string Backup::getUserRights(int userid, std::string domain)
 {
 	if(domain!="all")

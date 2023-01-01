@@ -208,6 +208,7 @@ public:
 	std::vector<STimeSpan> getBackupWindowIncrFile(void);
 	std::vector<STimeSpan> getBackupWindowFullFile(void);
 	std::vector<STimeSpan> getBackupWindowIncrImage(void);
+	std::string getBackupWindowIncrImagestring(void);
 	std::vector<STimeSpan> getBackupWindowFullImage(void);
 
 	std::vector<STimeSpan> getCleanupWindow(void);

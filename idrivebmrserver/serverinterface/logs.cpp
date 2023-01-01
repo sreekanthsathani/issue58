@@ -118,10 +118,19 @@ ACTION_IMPL(logs)
 			{
 				bed="l.errors>0";
 			}
-			else if(ll==1)
+	/*	else if(ll==1)
 			{
 				bed="(l.warnings>0 OR l.errors>0)";
+			}*/
+			else if(ll==1)
+			{
+			bed="(l.warnings>0)";
 			}
+
+			//else if (l1 == 0)
+			//{
+			//	bed = "(l.warnings>=0 OR l.errors>=0)";
+			//}
 			qstr="SELECT l.id AS id, c.name AS name, strftime('"+helper.getTimeFormatString()+"', l.created) AS time, l.errors AS errors, l.warnings AS warnings, "
 				"l.image AS image, l.incremental AS incremental, l.resumed AS resumed, l.restore AS restore FROM logs l INNER JOIN clients c ON l.clientid=c.id";
 

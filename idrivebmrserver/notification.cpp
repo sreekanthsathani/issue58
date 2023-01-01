@@ -8,7 +8,7 @@
 #include "ImageBackup.h"
 #include "Backup.h"
 #include "ClientMain.h"
-#include "notification .h"
+#include "notification.h"
 using namespace std;
 
 ServerSettings *settings;
